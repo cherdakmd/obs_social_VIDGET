@@ -1,0 +1,23 @@
+{
+  "name": "obs-social-vidget",
+  "version": "1.0.0",
+  "description": "Smooth, customizable rotating social media widget for OBS Studio with in-OBS configuration and Custom Browser Dock support",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "keywords": [
+    "obs",
+    "obs-studio",
+    "widget",
+    "overlay",
+    "streaming",
+    "socials",
+    "browser-source"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
