@@ -21,7 +21,127 @@
   ];
 
   var LAYOUTS = ['card', 'pill', 'split', 'vertical'];
-  var FONTS = ['modern', 'geometric', 'display', 'mono', 'rounded'];
+  var FONTS = [
+    'modern',
+    'geometric',
+    'rubik',
+    'display',
+    'russo',
+    'tektur',
+    'unbounded',
+    'rounded',
+    'mono',
+    'pixel',
+    'play',
+    'caveat',
+    'serif',
+    'custom'
+  ];
+
+  var FONT_PRESETS = [
+    {
+      id: 'modern',
+      labelRu: 'Inter / Segoe UI (Современный)',
+      labelEn: 'Inter / Segoe UI (Modern)',
+      stack: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
+      googleFamily: 'Inter:wght@400;500;600;700;800;900'
+    },
+    {
+      id: 'geometric',
+      labelRu: 'Montserrat (Геометричный)',
+      labelEn: 'Montserrat (Geometric)',
+      stack: "'Montserrat', 'Bahnschrift', 'Avenir Next', 'Segoe UI', sans-serif",
+      googleFamily: 'Montserrat:ital,wght@0,400..900;1,400..900'
+    },
+    {
+      id: 'rubik',
+      labelRu: 'Rubik (Стримерский мягкий)',
+      labelEn: 'Rubik (Smooth Streamer)',
+      stack: "'Rubik', 'Segoe UI', system-ui, sans-serif",
+      googleFamily: 'Rubik:ital,wght@0,400..900;1,400..900'
+    },
+    {
+      id: 'display',
+      labelRu: 'Oswald (Узкий киберспорт)',
+      labelEn: 'Oswald (Condensed Esports)',
+      stack: "'Oswald', 'Bahnschrift Condensed', 'Arial Narrow', sans-serif",
+      googleFamily: 'Oswald:wght@400;500;600;700'
+    },
+    {
+      id: 'russo',
+      labelRu: 'Russo One (Мощный заголовок)',
+      labelEn: 'Russo One (Bold Impact)',
+      stack: "'Russo One', 'Impact', 'Arial Black', sans-serif",
+      googleFamily: 'Russo+One'
+    },
+    {
+      id: 'tektur',
+      labelRu: 'Tektur (Киберпанк / Sci-Fi)',
+      labelEn: 'Tektur (Cyberpunk / Sci-Fi)',
+      stack: "'Tektur', 'Bahnschrift', 'Segoe UI', sans-serif",
+      googleFamily: 'Tektur:wght@400..900'
+    },
+    {
+      id: 'unbounded',
+      labelRu: 'Unbounded (Футуристичный)',
+      labelEn: 'Unbounded (Futuristic Wide)',
+      stack: "'Unbounded', 'Montserrat', sans-serif",
+      googleFamily: 'Unbounded:wght@400..900'
+    },
+    {
+      id: 'rounded',
+      labelRu: 'Nunito (Округлый уютный)',
+      labelEn: 'Nunito (Rounded Cozy)',
+      stack: "'Nunito', 'Comfortaa', 'SF Pro Rounded', 'Trebuchet MS', sans-serif",
+      googleFamily: 'Nunito:ital,wght@0,400..900;1,400..900'
+    },
+    {
+      id: 'mono',
+      labelRu: 'JetBrains Mono (Код / Моно)',
+      labelEn: 'JetBrains Mono (Code)',
+      stack: "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace",
+      googleFamily: 'JetBrains+Mono:ital,wght@0,400..800;1,400..800'
+    },
+    {
+      id: 'pixel',
+      labelRu: 'Press Start 2P (8-bit Ретро)',
+      labelEn: 'Press Start 2P (8-bit Pixel)',
+      stack: "'Press Start 2P', 'Consolas', monospace",
+      googleFamily: 'Press+Start+2P'
+    },
+    {
+      id: 'play',
+      labelRu: 'Play (Игровой техно)',
+      labelEn: 'Play (Gaming Tech)',
+      stack: "'Play', 'Segoe UI', sans-serif",
+      googleFamily: 'Play:wght@400;700'
+    },
+    {
+      id: 'caveat',
+      labelRu: 'Caveat (Рукописный)',
+      labelEn: 'Caveat (Handwritten)',
+      stack: "'Caveat', 'Segoe Print', cursive",
+      googleFamily: 'Caveat:wght@500;700'
+    },
+    {
+      id: 'serif',
+      labelRu: 'Playfair Display (Классика)',
+      labelEn: 'Playfair Display (Editorial)',
+      stack: "'Playfair Display', 'Georgia', serif",
+      googleFamily: 'Playfair+Display:ital,wght@0,500..900;1,500..900'
+    },
+    {
+      id: 'custom',
+      labelRu: 'Свой шрифт (система / Google Fonts)',
+      labelEn: 'Custom Font (System / Google Fonts)',
+      stack: "'Inter', 'Segoe UI', system-ui, sans-serif",
+      googleFamily: ''
+    }
+  ];
+
+  var TEXT_TRANSFORMS = ['none', 'uppercase', 'lowercase', 'capitalize'];
+  var TEXT_COLOR_MODES = ['accent', 'text', 'custom'];
+  var TEXT_SHADOW_MODES = ['none', 'soft', 'strong', 'glow'];
   var ANIM_STYLES = [
     'expand-pill',
     'slide-fade',
@@ -363,6 +483,34 @@
         qrSizePx: 64,
         iconSizePx: 44
       },
+      typography: {
+        fontPreset: 'modern',
+        customFontName: '',
+        handleSizePx: 19,
+        handleWeight: 700,
+        handleItalic: false,
+        handleTransform: 'none',
+        handleLetterSpacingPx: -0.3,
+        titleSizePx: 11,
+        titleWeight: 700,
+        titleItalic: false,
+        titleTransform: 'uppercase',
+        titleLetterSpacingPx: 1.1,
+        titleColorMode: 'accent',
+        titleCustomColor: '#38bdf8',
+        subtitleSizePx: 12.5,
+        subtitleWeight: 500,
+        subtitleItalic: false,
+        subtitleTransform: 'none',
+        subtitleOpacity: 0.78,
+        subtitleColorMode: 'text',
+        subtitleCustomColor: '#cbd5e1',
+        lineGapPx: 2,
+        textShadowMode: 'soft',
+        textShadowStrength: 0.55,
+        textStrokePx: 0,
+        textStrokeColor: '#000000'
+      },
       position: {
         anchor: 'bottom-left',
         offsetX: 36,
@@ -447,8 +595,15 @@
     var p = raw.playback && typeof raw.playback === 'object' ? raw.playback : {};
     var a = raw.animation && typeof raw.animation === 'object' ? raw.animation : {};
     var ap = raw.appearance && typeof raw.appearance === 'object' ? raw.appearance : {};
+    var ty = raw.typography && typeof raw.typography === 'object' ? raw.typography : {};
     var pos = raw.position && typeof raw.position === 'object' ? raw.position : {};
     var obs = raw.obs && typeof raw.obs === 'object' ? raw.obs : {};
+
+    var fontPreset = validEnum(
+      ty.fontPreset || ap.fontFamily,
+      FONTS,
+      def.typography.fontPreset
+    );
 
     return {
       schemaVersion: 1,
@@ -478,7 +633,7 @@
       appearance: {
         theme: validEnum(ap.theme, THEMES, def.appearance.theme),
         layout: validEnum(ap.layout, LAYOUTS, def.appearance.layout),
-        fontFamily: validEnum(ap.fontFamily, FONTS, def.appearance.fontFamily),
+        fontFamily: fontPreset,
         scale: clamp(ap.scale, 0.5, 2.2, def.appearance.scale),
         maxWidthPx: Math.round(clamp(ap.maxWidthPx, 220, 760, def.appearance.maxWidthPx)),
         borderRadiusPx: Math.round(clamp(ap.borderRadiusPx, 0, 999, def.appearance.borderRadiusPx)),
@@ -497,6 +652,34 @@
         qrSizePx: Math.round(clamp(ap.qrSizePx, 44, 120, def.appearance.qrSizePx)),
         iconSizePx: Math.round(clamp(ap.iconSizePx, 24, 72, def.appearance.iconSizePx))
       },
+      typography: {
+        fontPreset: fontPreset,
+        customFontName: typeof ty.customFontName === 'string' ? ty.customFontName.replace(/["'<>\\;]/g, '').trim().slice(0, 80) : '',
+        handleSizePx: clamp(ty.handleSizePx, 11, 38, def.typography.handleSizePx),
+        handleWeight: Math.round(clamp(ty.handleWeight, 300, 900, def.typography.handleWeight) / 100) * 100,
+        handleItalic: Boolean(ty.handleItalic),
+        handleTransform: validEnum(ty.handleTransform, TEXT_TRANSFORMS, def.typography.handleTransform),
+        handleLetterSpacingPx: clamp(ty.handleLetterSpacingPx, -2, 10, def.typography.handleLetterSpacingPx),
+        titleSizePx: clamp(ty.titleSizePx, 8, 26, def.typography.titleSizePx),
+        titleWeight: Math.round(clamp(ty.titleWeight, 300, 900, def.typography.titleWeight) / 100) * 100,
+        titleItalic: Boolean(ty.titleItalic),
+        titleTransform: validEnum(ty.titleTransform, TEXT_TRANSFORMS, def.typography.titleTransform),
+        titleLetterSpacingPx: clamp(ty.titleLetterSpacingPx, -1, 10, def.typography.titleLetterSpacingPx),
+        titleColorMode: validEnum(ty.titleColorMode, TEXT_COLOR_MODES, def.typography.titleColorMode),
+        titleCustomColor: validHex(ty.titleCustomColor, def.typography.titleCustomColor),
+        subtitleSizePx: clamp(ty.subtitleSizePx, 8, 26, def.typography.subtitleSizePx),
+        subtitleWeight: Math.round(clamp(ty.subtitleWeight, 300, 900, def.typography.subtitleWeight) / 100) * 100,
+        subtitleItalic: Boolean(ty.subtitleItalic),
+        subtitleTransform: validEnum(ty.subtitleTransform, TEXT_TRANSFORMS, def.typography.subtitleTransform),
+        subtitleOpacity: clamp(ty.subtitleOpacity, 0.25, 1, def.typography.subtitleOpacity),
+        subtitleColorMode: validEnum(ty.subtitleColorMode, TEXT_COLOR_MODES, def.typography.subtitleColorMode),
+        subtitleCustomColor: validHex(ty.subtitleCustomColor, def.typography.subtitleCustomColor),
+        lineGapPx: clamp(ty.lineGapPx, 0, 14, def.typography.lineGapPx),
+        textShadowMode: validEnum(ty.textShadowMode, TEXT_SHADOW_MODES, def.typography.textShadowMode),
+        textShadowStrength: clamp(ty.textShadowStrength, 0, 1, def.typography.textShadowStrength),
+        textStrokePx: clamp(ty.textStrokePx, 0, 3, def.typography.textStrokePx),
+        textStrokeColor: validHex(ty.textStrokeColor, def.typography.textStrokeColor)
+      },
       position: {
         anchor: validEnum(pos.anchor, ANCHORS, def.position.anchor),
         offsetX: Math.round(clamp(pos.offsetX, 0, 400, def.position.offsetX)),
@@ -509,15 +692,63 @@
     };
   }
 
+  function getFontPreset(id) {
+    for (var i = 0; i < FONT_PRESETS.length; i++) {
+      if (FONT_PRESETS[i].id === id) return FONT_PRESETS[i];
+    }
+    return FONT_PRESETS[0];
+  }
+
   function applyStylePreset(config, presetId) {
     var preset = STYLE_PRESETS[presetId];
     if (!preset) return config;
     var next = clone(config);
     if (preset.appearance) {
       Object.assign(next.appearance, preset.appearance);
+      if (preset.appearance.fontFamily && next.typography) {
+        next.typography.fontPreset = preset.appearance.fontFamily;
+      }
     }
     if (preset.animation) {
       Object.assign(next.animation, preset.animation);
+    }
+    return normalizeConfig(next);
+  }
+
+  function resetSection(config, target) {
+    var def = getDefaultConfig();
+    if (target === 'all') {
+      if (config && config.lang) def.lang = config.lang === 'en' ? 'en' : 'ru';
+      return def;
+    }
+    var next = clone(config || def);
+    if (target === 'design') {
+      var keepFont = next.typography ? next.typography.fontPreset : def.appearance.fontFamily;
+      next.appearance = clone(def.appearance);
+      next.appearance.fontFamily = keepFont;
+    } else if (target === 'typography') {
+      next.typography = clone(def.typography);
+      next.appearance.fontFamily = def.typography.fontPreset;
+      next.appearance.textColor = def.appearance.textColor;
+    } else if (target === 'animation') {
+      next.animation = clone(def.animation);
+      next.playback.displayDurationSec = def.playback.displayDurationSec;
+      next.playback.enterDurationMs = def.playback.enterDurationMs;
+      next.playback.exitDurationMs = def.playback.exitDurationMs;
+      next.playback.gapDurationMs = def.playback.gapDurationMs;
+      next.playback.cyclePauseSec = def.playback.cyclePauseSec;
+      next.playback.shuffle = def.playback.shuffle;
+    } else if (target === 'look') {
+      next.appearance = clone(def.appearance);
+      next.typography = clone(def.typography);
+      next.animation = clone(def.animation);
+      next.position = clone(def.position);
+      next.playback.displayDurationSec = def.playback.displayDurationSec;
+      next.playback.enterDurationMs = def.playback.enterDurationMs;
+      next.playback.exitDurationMs = def.playback.exitDurationMs;
+      next.playback.gapDurationMs = def.playback.gapDurationMs;
+      next.playback.cyclePauseSec = def.playback.cyclePauseSec;
+      next.playback.shuffle = def.playback.shuffle;
     }
     return normalizeConfig(next);
   }
@@ -884,6 +1115,10 @@
     THEMES: THEMES,
     LAYOUTS: LAYOUTS,
     FONTS: FONTS,
+    FONT_PRESETS: FONT_PRESETS,
+    TEXT_TRANSFORMS: TEXT_TRANSFORMS,
+    TEXT_COLOR_MODES: TEXT_COLOR_MODES,
+    TEXT_SHADOW_MODES: TEXT_SHADOW_MODES,
     ANIM_STYLES: ANIM_STYLES,
     DIRECTIONS: DIRECTIONS,
     EASINGS: EASINGS,
@@ -894,9 +1129,11 @@
     STYLE_PRESETS: STYLE_PRESETS,
     createItemFromPlatform: createItemFromPlatform,
     getDefaultConfig: getDefaultConfig,
+    getFontPreset: getFontPreset,
     normalizeItem: normalizeItem,
     normalizeConfig: normalizeConfig,
     applyStylePreset: applyStylePreset,
+    resetSection: resetSection,
     encodeConfigToParam: encodeConfigToParam,
     decodeConfigFromParam: decodeConfigFromParam,
     buildShareUrl: buildShareUrl,
