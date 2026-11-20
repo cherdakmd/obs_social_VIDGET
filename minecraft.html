@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OBS Minecraft Widget</title>
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <div class="widget-stage" id="widget-stage" data-anchor="bottom-left">
+    <div class="stage-slot" id="stage-slot"></div>
+  </div>
+
+  <div class="hover-toolbar" id="hover-toolbar">
+    <button class="hover-btn primary" id="btn-open-studio" type="button">⚙ Настроить сервер</button>
+    <button class="hover-btn icon-only" id="btn-hover-pause" type="button" title="Пауза">⏸</button>
+  </div>
+
+  <aside class="studio-shell" id="studio-shell" aria-label="OBS Minecraft Widget Settings"></aside>
+  <div class="studio-toast" id="studio-toast" role="status" aria-live="polite"></div>
+
+  <script src="src/icons.js"></script>
+  <script src="src/qr.js"></script>
+  <script src="src/i18n.js"></script>
+  <script src="src/config.js"></script>
+  <script src="src/animations.js"></script>
+  <script src="src/renderer.js"></script>
+  <script src="src/mc-icons.js"></script>
+  <script src="src/mc-i18n.js"></script>
+  <script src="src/mc-config.js"></script>
+  <script src="src/mc-ping.js"></script>
+  <script src="src/mc-renderer.js"></script>
+  <script src="src/mc-studio.js"></script>
+  <script src="src/mc-app.js"></script>
+</body>
+</html>

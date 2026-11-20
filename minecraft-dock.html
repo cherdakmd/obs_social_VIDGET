@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OBS Minecraft Widget — Dock</title>
+  <meta http-equiv="refresh" content="0; url=minecraft.html?dock=1">
+  <script>
+    (function () {
+      var hash = window.location.hash || '';
+      window.location.replace('minecraft.html?dock=1' + hash);
+    })();
+  </script>
+  <style>
+    body {
+      margin: 0;
+      background: #161922;
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    a { color: #22c55e; }
+  </style>
+</head>
+<body>
+  <p>Открытие панели Minecraft-сервера... <a href="minecraft.html?dock=1">Перейти</a></p>
+</body>
+</html>
