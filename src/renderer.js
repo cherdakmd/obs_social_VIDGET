@@ -217,10 +217,11 @@
     card.setAttribute('data-item-id', item.id || '');
     applyCardStyles(card, item, config, opts.scaleOverride);
 
+    var compactLine = ap.layout === 'pill' || ap.layout === 'ticker';
     var showTitle = Boolean(ap.showPlatformTitle && item.title && item.title.trim());
-    var showSubtitle = Boolean(ap.showSubtitle && item.subtitle && item.subtitle.trim() && ap.layout !== 'pill');
+    var showSubtitle = Boolean(ap.showSubtitle && item.subtitle && item.subtitle.trim() && !compactLine);
     var domainText = ap.showLinkDomain ? formatShortUrl(item.url) : '';
-    var showDomain = Boolean(domainText && domainText !== (item.handle || '').trim() && ap.layout !== 'pill');
+    var showDomain = Boolean(domainText && domainText !== (item.handle || '').trim() && !compactLine);
     var showQr = shouldShowQr(item, config);
 
     var qrMarkup = '';
@@ -270,11 +271,12 @@
   function getStructuralSignature(item, config) {
     var ap = (config && config.appearance) || {};
     var anim = (config && config.animation) || {};
+    var compactLine = ap.layout === 'pill' || ap.layout === 'ticker';
     var showQr = shouldShowQr(item, config);
     var domainText = ap.showLinkDomain ? formatShortUrl(item.url) : '';
-    var showDomain = Boolean(domainText && domainText !== (item.handle || '').trim() && ap.layout !== 'pill');
+    var showDomain = Boolean(domainText && domainText !== (item.handle || '').trim() && !compactLine);
     var showTitle = Boolean(ap.showPlatformTitle && item.title && item.title.trim());
-    var showSub = Boolean(ap.showSubtitle && item.subtitle && item.subtitle.trim() && ap.layout !== 'pill');
+    var showSub = Boolean(ap.showSubtitle && item.subtitle && item.subtitle.trim() && !compactLine);
     return [
       item.id,
       ap.layout || 'card',

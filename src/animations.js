@@ -285,6 +285,221 @@
         break;
       }
 
+      case 'glitch-pulse': {
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 0, transform: 'translate3d(' + Math.round(vec.x * 0.4) + 'px, 0, 0) skewX(18deg)', filter: 'brightness(1.8) contrast(1.4)' },
+            { opacity: 1, transform: 'translate3d(-7px, 2px, 0) skewX(-12deg)', filter: 'brightness(1.5) contrast(1.25)', offset: 0.25 },
+            { opacity: 0.72, transform: 'translate3d(6px, -2px, 0) skewX(8deg)', filter: 'brightness(1.25)', offset: 0.45 },
+            { opacity: 1, transform: 'translate3d(-3px, 0, 0) skewX(-4deg)', filter: 'brightness(1.1)', offset: 0.7 },
+            { opacity: 1, transform: 'translate3d(0, 0, 0) skewX(0deg)', filter: 'brightness(1) contrast(1)' }
+          ],
+          options: { duration: dur, easing: 'steps(1, end)', fill: 'both' }
+        });
+        steps.push({
+          target: 'icon',
+          keyframes: [
+            { opacity: 0, transform: 'scale(1.35)' },
+            { opacity: 1, transform: 'scale(0.92)', offset: 0.5 },
+            { opacity: 1, transform: 'scale(1)' }
+          ],
+          options: { duration: Math.round(dur * 0.85), easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'text',
+          keyframes: [
+            { opacity: 0, transform: 'translate3d(14px,0,0)' },
+            { opacity: 1, transform: 'translate3d(0,0,0)' }
+          ],
+          options: { duration: Math.round(dur * 0.75), delay: Math.round(stagger * 0.6), easing: easing, fill: 'both' }
+        });
+        break;
+      }
+
+      case 'zoom-focus': {
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 0, filter: 'blur(12px)', transform: 'scale(1.18) translate3d(' + Math.round(vec.x * 0.15) + 'px,' + Math.round(vec.y * 0.15) + 'px,0)' },
+            { opacity: 1, filter: 'blur(0px)', transform: 'scale(1) translate3d(0,0,0)' }
+          ],
+          options: { duration: dur, easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'icon',
+          keyframes: [
+            { opacity: 0, transform: 'scale(0.65)' },
+            { opacity: 1, transform: 'scale(1)' }
+          ],
+          options: { duration: Math.round(dur * 0.85), delay: Math.round(stagger * 0.4), easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'text',
+          keyframes: [
+            { opacity: 0, transform: 'scale(0.95)' },
+            { opacity: 1, transform: 'scale(1)' }
+          ],
+          options: { duration: Math.round(dur * 0.85), delay: stagger, easing: easing, fill: 'both' }
+        });
+        break;
+      }
+
+      case 'icon-pop-reveal': {
+        var openPop = clipInsetOpen(radius);
+        var closedPop = clipInsetClosed(dir, radius);
+        steps.push({
+          target: 'icon',
+          keyframes: [
+            { opacity: 0, transform: 'scale(0.2) rotate(-25deg)' },
+            { opacity: 1, transform: 'scale(1.18) rotate(5deg)', offset: 0.65 },
+            { opacity: 1, transform: 'scale(1) rotate(0deg)' }
+          ],
+          options: { duration: Math.round(dur * 0.72), easing: 'cubic-bezier(0.22, 1.28, 0.36, 1)', fill: 'both' }
+        });
+        steps.push({
+          target: 'surface',
+          keyframes: [
+            { clipPath: closedPop, opacity: 0.15 },
+            { clipPath: openPop, opacity: 1 }
+          ],
+          options: { duration: dur, delay: Math.round(dur * 0.18), easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'text',
+          keyframes: [
+            { opacity: 0, transform: 'translate3d(' + Math.round(vec.x * 0.45) + 'px,0,0)' },
+            { opacity: 1, transform: 'translate3d(0,0,0)' }
+          ],
+          options: { duration: Math.round(dur * 0.75), delay: Math.round(dur * 0.28 + stagger * 0.6), easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'qr',
+          keyframes: [
+            { opacity: 0, transform: 'scale(0.6)' },
+            { opacity: 1, transform: 'scale(1)' }
+          ],
+          options: { duration: Math.round(dur * 0.65), delay: Math.round(dur * 0.36 + stagger), easing: easing, fill: 'both' }
+        });
+        break;
+      }
+
+      case 'center-split': {
+        var rSplit = Math.min(Number(radius) || 0, 48);
+        var rSplitSuf = rSplit > 0 ? ' round ' + rSplit + 'px' : '';
+        var closedCenter = (dir === 'top' || dir === 'bottom')
+          ? 'inset(50% 0% 50% 0%' + rSplitSuf + ')'
+          : 'inset(0% 50% 0% 50%' + rSplitSuf + ')';
+        steps.push({
+          target: 'surface',
+          keyframes: [
+            { clipPath: closedCenter, opacity: 0.2 },
+            { clipPath: clipInsetOpen(radius), opacity: 1 }
+          ],
+          options: { duration: dur, easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 0, transform: 'scale(0.9)' },
+            { opacity: 1, transform: 'scale(1)' }
+          ],
+          options: { duration: Math.round(dur * 0.65), easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'text',
+          keyframes: [
+            { opacity: 0, letterSpacing: '0.18em' },
+            { opacity: 1, letterSpacing: 'normal' }
+          ],
+          options: { duration: Math.round(dur * 0.8), delay: Math.round(stagger * 0.7), easing: easing, fill: 'both' }
+        });
+        break;
+      }
+
+      case 'wave-slide': {
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 0, transform: 'translate3d(' + vec.x + 'px,' + (vec.y + 12) + 'px,0)' },
+            { opacity: 1, transform: 'translate3d(0, -3px, 0)', offset: 0.75 },
+            { opacity: 1, transform: 'translate3d(0, 0, 0)' }
+          ],
+          options: { duration: dur, easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'icon',
+          keyframes: [
+            { opacity: 0, transform: 'translateY(14px) scale(0.8)' },
+            { opacity: 1, transform: 'translateY(-3px) scale(1.06)', offset: 0.7 },
+            { opacity: 1, transform: 'translateY(0) scale(1)' }
+          ],
+          options: { duration: Math.round(dur * 0.85), delay: Math.round(stagger * 0.6), easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'text',
+          keyframes: [
+            { opacity: 0, transform: 'translateY(12px)' },
+            { opacity: 1, transform: 'translateY(0)' }
+          ],
+          options: { duration: Math.round(dur * 0.8), delay: Math.round(stagger * 1.2), easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'qr',
+          keyframes: [
+            { opacity: 0, transform: 'translateY(12px) scale(0.85)' },
+            { opacity: 1, transform: 'translateY(0) scale(1)' }
+          ],
+          options: { duration: Math.round(dur * 0.75), delay: Math.round(stagger * 1.8), easing: easing, fill: 'both' }
+        });
+        break;
+      }
+
+      case 'neon-surge': {
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 0, filter: 'brightness(2.2) saturate(1.7) blur(6px)', transform: 'translate3d(' + Math.round(vec.x * 0.5) + 'px,' + Math.round(vec.y * 0.5) + 'px,0) scale(0.92)' },
+            { opacity: 1, filter: 'brightness(1.4) saturate(1.3) blur(0px)', transform: 'translate3d(0,0,0) scale(1.02)', offset: 0.65 },
+            { opacity: 1, filter: 'brightness(1) saturate(1) blur(0px)', transform: 'translate3d(0,0,0) scale(1)' }
+          ],
+          options: { duration: dur, easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'shimmer',
+          keyframes: [
+            { opacity: 0.95, transform: 'translateX(-120%) skewX(-20deg)' },
+            { opacity: 0, transform: 'translateX(230%) skewX(-20deg)' }
+          ],
+          options: { duration: Math.round(dur * 1.15), delay: Math.round(dur * 0.12), easing: 'ease-out', fill: 'both' }
+        });
+        break;
+      }
+
+      case 'swing-3d': {
+        var axis = dir === 'top' || dir === 'bottom' ? 'rotateX' : 'rotateY';
+        var sign = dir === 'right' || dir === 'top' ? 1 : -1;
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 0, transform: 'perspective(1000px) ' + axis + '(' + (sign * 65) + 'deg) scale(0.88)' },
+            { opacity: 1, transform: 'perspective(1000px) ' + axis + '(' + (-sign * 10) + 'deg) scale(1.01)', offset: 0.68 },
+            { opacity: 1, transform: 'perspective(1000px) ' + axis + '(' + (sign * 4) + 'deg) scale(1)', offset: 0.85 },
+            { opacity: 1, transform: 'perspective(1000px) ' + axis + '(0deg) scale(1)' }
+          ],
+          options: { duration: dur, easing: easing, fill: 'both' }
+        });
+        steps.push({
+          target: 'icon',
+          keyframes: [
+            { opacity: 0, transform: 'scale(0.65)' },
+            { opacity: 1, transform: 'scale(1)' }
+          ],
+          options: { duration: Math.round(dur * 0.75), delay: Math.round(stagger * 0.6), easing: easing, fill: 'both' }
+        });
+        break;
+      }
+
       case 'slide-fade':
       default: {
         steps.push({
@@ -441,6 +656,124 @@
         break;
       }
 
+      case 'glitch-pulse': {
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 1, transform: 'translate3d(0,0,0) skewX(0deg)', filter: 'brightness(1)' },
+            { opacity: 0.85, transform: 'translate3d(-8px,0,0) skewX(14deg)', filter: 'brightness(1.6)', offset: 0.35 },
+            { opacity: 0.45, transform: 'translate3d(10px,0,0) skewX(-18deg)', filter: 'brightness(1.9)', offset: 0.7 },
+            { opacity: 0, transform: 'translate3d(' + Math.round(opp.x * 0.5) + 'px,0,0) skewX(20deg)', filter: 'brightness(1.4)' }
+          ],
+          options: { duration: dur, easing: 'steps(1, end)', fill: 'both' }
+        });
+        break;
+      }
+
+      case 'zoom-focus': {
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 1, filter: 'blur(0px)', transform: 'scale(1)' },
+            { opacity: 0, filter: 'blur(12px)', transform: 'scale(0.84)' }
+          ],
+          options: { duration: dur, easing: EXIT_EASING, fill: 'both' }
+        });
+        break;
+      }
+
+      case 'icon-pop-reveal': {
+        steps.push({
+          target: 'text',
+          keyframes: [
+            { opacity: 1, transform: 'translate3d(0,0,0)' },
+            { opacity: 0, transform: 'translate3d(' + Math.round(vec.x * 0.3) + 'px,0,0)' }
+          ],
+          options: { duration: Math.round(dur * 0.55), easing: EXIT_EASING, fill: 'both' }
+        });
+        steps.push({
+          target: 'surface',
+          keyframes: [
+            { clipPath: clipInsetOpen(radius), opacity: 1 },
+            { clipPath: clipInsetClosed(dir, radius), opacity: 0.15 }
+          ],
+          options: { duration: Math.round(dur * 0.9), delay: Math.round(dur * 0.08), easing: EXIT_EASING, fill: 'both' }
+        });
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 1, transform: 'scale(1)' },
+            { opacity: 0, transform: 'scale(0.85)' }
+          ],
+          options: { duration: Math.round(dur * 0.5), delay: Math.round(dur * 0.5), easing: 'ease-in', fill: 'both' }
+        });
+        break;
+      }
+
+      case 'center-split': {
+        var rExSplit = Math.min(Number(radius) || 0, 48);
+        var rExSuf = rExSplit > 0 ? ' round ' + rExSplit + 'px' : '';
+        var closedExitCenter = (dir === 'top' || dir === 'bottom')
+          ? 'inset(50% 0% 50% 0%' + rExSuf + ')'
+          : 'inset(0% 50% 0% 50%' + rExSuf + ')';
+        steps.push({
+          target: 'surface',
+          keyframes: [
+            { clipPath: clipInsetOpen(radius), opacity: 1 },
+            { clipPath: closedExitCenter, opacity: 0.1 }
+          ],
+          options: { duration: dur, easing: EXIT_EASING, fill: 'both' }
+        });
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 1, transform: 'scale(1)' },
+            { opacity: 0, transform: 'scale(0.92)' }
+          ],
+          options: { duration: Math.round(dur * 0.55), delay: Math.round(dur * 0.45), easing: 'ease-in', fill: 'both' }
+        });
+        break;
+      }
+
+      case 'wave-slide': {
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 1, transform: 'translate3d(0,0,0)' },
+            { opacity: 0, transform: 'translate3d(' + Math.round(opp.x * 0.75) + 'px,' + (opp.y + 12) + 'px,0)' }
+          ],
+          options: { duration: dur, easing: EXIT_EASING, fill: 'both' }
+        });
+        break;
+      }
+
+      case 'neon-surge': {
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 1, filter: 'brightness(1) blur(0px)', transform: 'scale(1)' },
+            { opacity: 0.8, filter: 'brightness(1.9) blur(2px)', transform: 'scale(1.03)', offset: 0.35 },
+            { opacity: 0, filter: 'brightness(2.2) blur(8px)', transform: 'translate3d(' + Math.round(opp.x * 0.5) + 'px,0,0) scale(0.9)' }
+          ],
+          options: { duration: dur, easing: EXIT_EASING, fill: 'both' }
+        });
+        break;
+      }
+
+      case 'swing-3d': {
+        var exAxis = dir === 'top' || dir === 'bottom' ? 'rotateX' : 'rotateY';
+        var exSign = dir === 'right' || dir === 'top' ? -1 : 1;
+        steps.push({
+          target: 'card',
+          keyframes: [
+            { opacity: 1, transform: 'perspective(1000px) ' + exAxis + '(0deg) scale(1)' },
+            { opacity: 0, transform: 'perspective(1000px) ' + exAxis + '(' + (exSign * 65) + 'deg) scale(0.88)' }
+          ],
+          options: { duration: dur, easing: EXIT_EASING, fill: 'both' }
+        });
+        break;
+      }
+
       case 'slide-fade':
       default: {
         steps.push({
@@ -551,7 +884,7 @@
 
       // Progress bar / ring animation
       var progressStyle = anim.progressStyle || 'bottom-bar';
-      if (progressStyle === 'bottom-bar' || progressStyle === 'top-line') {
+      if (progressStyle === 'bottom-bar' || progressStyle === 'top-line' || progressStyle === 'glow-edge') {
         var bar = cardEl.querySelector('.card-progress-fill');
         if (bar && holdMs > 0) {
           try {
@@ -562,6 +895,18 @@
             if (paused) barAnim.pause();
             idleAnims.push(barAnim);
           } catch (_e) {}
+        }
+      } else if (progressStyle === 'side-bar') {
+        var sBar = cardEl.querySelector('.card-progress-fill');
+        if (sBar && holdMs > 0) {
+          try {
+            var sBarAnim = sBar.animate(
+              [{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }],
+              { duration: holdMs, easing: 'linear', fill: 'forwards' }
+            );
+            if (paused) sBarAnim.pause();
+            idleAnims.push(sBarAnim);
+          } catch (_e1) {}
         }
       } else if (progressStyle === 'icon-ring') {
         var ring = cardEl.querySelector('.card-ring-circle');
@@ -578,7 +923,7 @@
         }
       }
 
-      // Idle motion on icon
+      // Idle motion on icon / card
       var iconEl = cardEl.querySelector('.card-icon');
       if (iconEl) {
         if (anim.idleMotion === 'float') {
@@ -621,7 +966,51 @@
             if (paused) tAnim.pause();
             idleAnims.push(tAnim);
           } catch (_e5) {}
+        } else if (anim.idleMotion === 'spin-slow') {
+          try {
+            var spAnim = iconEl.animate(
+              [
+                { transform: 'perspective(300px) rotateY(0deg)' },
+                { transform: 'perspective(300px) rotateY(180deg)' },
+                { transform: 'perspective(300px) rotateY(360deg)' }
+              ],
+              { duration: 3600, iterations: Infinity, easing: 'ease-in-out' }
+            );
+            if (paused) spAnim.pause();
+            idleAnims.push(spAnim);
+          } catch (_e5b) {}
+        } else if (anim.idleMotion === 'neon-flicker') {
+          try {
+            var nfAnim = iconEl.animate(
+              [
+                { opacity: 1, filter: 'brightness(1)' },
+                { opacity: 0.78, filter: 'brightness(0.85)', offset: 0.42 },
+                { opacity: 1, filter: 'brightness(1.35)', offset: 0.46 },
+                { opacity: 0.9, filter: 'brightness(1.0)', offset: 0.5 },
+                { opacity: 1, filter: 'brightness(1.15)', offset: 0.85 },
+                { opacity: 1, filter: 'brightness(1)' }
+              ],
+              { duration: 2600, iterations: Infinity, easing: 'ease-in-out' }
+            );
+            if (paused) nfAnim.pause();
+            idleAnims.push(nfAnim);
+          } catch (_e5c) {}
         }
+      }
+
+      if (anim.idleMotion === 'breathe') {
+        try {
+          var brAnim = cardEl.animate(
+            [
+              { transform: 'scale(1)' },
+              { transform: 'scale(1.022)' },
+              { transform: 'scale(1)' }
+            ],
+            { duration: 3000, iterations: Infinity, easing: 'ease-in-out' }
+          );
+          if (paused) brAnim.pause();
+          idleAnims.push(brAnim);
+        } catch (_e5d) {}
       }
 
       // Optional subtle shimmer sweep mid-hold

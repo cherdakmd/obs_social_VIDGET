@@ -184,3 +184,29 @@ test('resetSection resets targeted config sections and look-only preserves user 
   assert.equal(resetAll.items[0].handle, '@my_stream_tg');
 });
 
+test('all 16 style presets, 14 themes, and 10 layouts normalize and apply cleanly', () => {
+  const presetIds = Object.keys(Config.STYLE_PRESETS);
+  assert.ok(presetIds.length >= 16, `Expected 16+ presets, got ${presetIds.length}`);
+  assert.ok(Config.THEMES.length >= 14);
+  assert.ok(Config.LAYOUTS.length >= 10);
+
+  const base = Config.getDefaultConfig();
+  base.items[0].handle = '@preserved_user';
+
+  for (const pid of presetIds) {
+    const applied = Config.applyStylePreset(base, pid);
+    assert.equal(applied.items[0].handle, '@preserved_user');
+    assert.ok(Config.THEMES.includes(applied.appearance.theme), `invalid theme in preset ${pid}`);
+    assert.ok(Config.LAYOUTS.includes(applied.appearance.layout), `invalid layout in preset ${pid}`);
+    assert.ok(Config.ANIM_STYLES.includes(applied.animation.style), `invalid anim in preset ${pid}`);
+    assert.ok(Config.IDLE_MOTIONS.includes(applied.animation.idleMotion), `invalid idle in preset ${pid}`);
+    assert.ok(Config.PROGRESS_STYLES.includes(applied.animation.progressStyle), `invalid progress in preset ${pid}`);
+  }
+
+  // Switching from ghost-overlay back to minimal-clean resets stroke cleanly
+  const ghost = Config.applyStylePreset(base, 'ghost-overlay');
+  assert.ok(ghost.typography.textStrokePx > 0);
+  const minimal = Config.applyStylePreset(ghost, 'minimal-clean');
+  assert.equal(minimal.typography.textStrokePx, 0);
+});
+
