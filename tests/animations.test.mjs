@@ -51,3 +51,16 @@ test('i18n Russian and English dictionaries have matching top-level and nested k
     }
   }
 });
+
+test('i18n covers all themes, layouts, presets, animation styles, idle motions, and progress indicators', () => {
+  assert.ok(Config.ANIM_STYLES.length >= 16);
+  for (const lang of ['ru', 'en']) {
+    const d = I18n.DICT[lang];
+    for (const id of Config.THEMES) assert.ok(d.themes[id], `missing theme ${id} in ${lang}`);
+    for (const id of Config.LAYOUTS) assert.ok(d.layouts[id], `missing layout ${id} in ${lang}`);
+    for (const id of Object.keys(Config.STYLE_PRESETS)) assert.ok(d.presets[id], `missing preset ${id} in ${lang}`);
+    for (const id of Config.ANIM_STYLES) assert.ok(d.animStyles[id], `missing animStyle ${id} in ${lang}`);
+    for (const id of Config.IDLE_MOTIONS) assert.ok(d.idleMotions[id], `missing idleMotion ${id} in ${lang}`);
+    for (const id of Config.PROGRESS_STYLES) assert.ok(d.progressStyles[id], `missing progressStyle ${id} in ${lang}`);
+  }
+});

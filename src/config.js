@@ -17,10 +17,28 @@
     'liquid-gradient',
     'streamer-pro',
     'retro-pop',
-    'compact-strip'
+    'compact-strip',
+    'cyber-hud',
+    'frosted-light',
+    'holo-border',
+    'oled-neon',
+    'arcade-pixel',
+    'broadcast-bar',
+    'pure-text'
   ];
 
-  var LAYOUTS = ['card', 'pill', 'split', 'vertical'];
+  var LAYOUTS = [
+    'card',
+    'pill',
+    'split',
+    'vertical',
+    'chamfer',
+    'ribbon',
+    'floating-badge',
+    'ticker',
+    'showcase',
+    'skew'
+  ];
   var FONTS = [
     'modern',
     'geometric',
@@ -151,12 +169,19 @@
     'kinetic-wipe',
     'drop-settle',
     'elastic-swing',
+    'glitch-pulse',
+    'zoom-focus',
+    'icon-pop-reveal',
+    'center-split',
+    'wave-slide',
+    'neon-surge',
+    'swing-3d',
     'instant'
   ];
   var DIRECTIONS = ['left', 'right', 'top', 'bottom'];
   var EASINGS = ['spring', 'smooth', 'expo', 'bounce', 'silk'];
-  var IDLE_MOTIONS = ['none', 'float', 'pulse-glow', 'tilt'];
-  var PROGRESS_STYLES = ['none', 'bottom-bar', 'top-line', 'icon-ring'];
+  var IDLE_MOTIONS = ['none', 'float', 'pulse-glow', 'tilt', 'spin-slow', 'breathe', 'neon-flicker'];
+  var PROGRESS_STYLES = ['none', 'bottom-bar', 'top-line', 'icon-ring', 'side-bar', 'glow-edge'];
   var ANCHORS = [
     'top-left',
     'top-center',
@@ -373,6 +398,319 @@
         idleMotion: 'none',
         shimmerSweep: true,
         progressStyle: 'bottom-bar'
+      }
+    },
+    'cyber-hud': {
+      appearance: {
+        theme: 'cyber-hud',
+        layout: 'chamfer',
+        fontFamily: 'tektur',
+        borderRadiusPx: 4,
+        bgOpacity: 0.88,
+        bgColor: '#070b14',
+        textColor: '#f1f5f9',
+        blurPx: 12,
+        borderWidthPx: 1.5,
+        borderOpacity: 0.6,
+        glowIntensity: 0.85,
+        shadowIntensity: 0.8,
+        showPlatformTitle: true,
+        showSubtitle: true,
+        showLinkDomain: false,
+        showQrGlobal: false,
+        iconSizePx: 44
+      },
+      typography: {
+        fontPreset: 'tektur',
+        textShadowMode: 'glow',
+        textStrokePx: 0
+      },
+      animation: {
+        style: 'glitch-pulse',
+        direction: 'left',
+        easing: 'expo',
+        idleMotion: 'neon-flicker',
+        shimmerSweep: true,
+        progressStyle: 'glow-edge'
+      }
+    },
+    'frosted-light': {
+      appearance: {
+        theme: 'frosted-light',
+        layout: 'card',
+        fontFamily: 'geometric',
+        borderRadiusPx: 20,
+        bgOpacity: 0.86,
+        bgColor: '#f8fafc',
+        textColor: '#0f172a',
+        blurPx: 18,
+        borderWidthPx: 1,
+        borderOpacity: 0.65,
+        glowIntensity: 0.25,
+        shadowIntensity: 0.55,
+        showPlatformTitle: true,
+        showSubtitle: true,
+        showLinkDomain: false,
+        showQrGlobal: false,
+        iconSizePx: 44
+      },
+      typography: {
+        fontPreset: 'geometric',
+        textShadowMode: 'none',
+        textStrokePx: 0,
+        subtitleColorMode: 'text'
+      },
+      animation: {
+        style: 'zoom-focus',
+        direction: 'bottom',
+        easing: 'silk',
+        idleMotion: 'breathe',
+        shimmerSweep: true,
+        progressStyle: 'top-line'
+      }
+    },
+    'holo-prism': {
+      appearance: {
+        theme: 'holo-border',
+        layout: 'floating-badge',
+        fontFamily: 'unbounded',
+        borderRadiusPx: 18,
+        bgOpacity: 0.82,
+        bgColor: '#0b0e19',
+        textColor: '#ffffff',
+        blurPx: 16,
+        borderWidthPx: 2,
+        borderOpacity: 0.7,
+        glowIntensity: 0.9,
+        shadowIntensity: 0.8,
+        showPlatformTitle: true,
+        showSubtitle: true,
+        showLinkDomain: false,
+        showQrGlobal: false,
+        iconSizePx: 46
+      },
+      typography: {
+        fontPreset: 'unbounded',
+        textShadowMode: 'soft',
+        textStrokePx: 0
+      },
+      animation: {
+        style: 'icon-pop-reveal',
+        direction: 'left',
+        easing: 'spring',
+        idleMotion: 'spin-slow',
+        shimmerSweep: true,
+        progressStyle: 'glow-edge'
+      }
+    },
+    'oled-glow': {
+      appearance: {
+        theme: 'oled-neon',
+        layout: 'pill',
+        fontFamily: 'rubik',
+        borderRadiusPx: 999,
+        bgOpacity: 0.95,
+        bgColor: '#030408',
+        textColor: '#ffffff',
+        blurPx: 8,
+        borderWidthPx: 1.5,
+        borderOpacity: 0.75,
+        glowIntensity: 1.0,
+        shadowIntensity: 0.85,
+        showPlatformTitle: false,
+        showSubtitle: true,
+        showLinkDomain: false,
+        showQrGlobal: false,
+        iconSizePx: 42
+      },
+      typography: {
+        fontPreset: 'rubik',
+        textShadowMode: 'glow',
+        textStrokePx: 0
+      },
+      animation: {
+        style: 'neon-surge',
+        direction: 'left',
+        easing: 'expo',
+        idleMotion: 'pulse-glow',
+        shimmerSweep: true,
+        progressStyle: 'icon-ring'
+      }
+    },
+    'arcade-8bit': {
+      appearance: {
+        theme: 'arcade-pixel',
+        layout: 'card',
+        fontFamily: 'pixel',
+        borderRadiusPx: 0,
+        bgOpacity: 0.96,
+        bgColor: '#11131f',
+        textColor: '#ffffff',
+        blurPx: 0,
+        borderWidthPx: 3,
+        borderOpacity: 1.0,
+        glowIntensity: 0.4,
+        shadowIntensity: 0.95,
+        showPlatformTitle: true,
+        showSubtitle: true,
+        showLinkDomain: false,
+        showQrGlobal: false,
+        iconSizePx: 40
+      },
+      typography: {
+        fontPreset: 'pixel',
+        handleSizePx: 14,
+        titleSizePx: 9.5,
+        subtitleSizePx: 10,
+        textShadowMode: 'strong',
+        textStrokePx: 0
+      },
+      animation: {
+        style: 'drop-settle',
+        direction: 'top',
+        easing: 'bounce',
+        idleMotion: 'tilt',
+        shimmerSweep: false,
+        progressStyle: 'bottom-bar'
+      }
+    },
+    'tv-lower-third': {
+      appearance: {
+        theme: 'broadcast-bar',
+        layout: 'ribbon',
+        fontFamily: 'display',
+        borderRadiusPx: 6,
+        bgOpacity: 0.92,
+        bgColor: '#0c111d',
+        textColor: '#f8fafc',
+        blurPx: 8,
+        borderWidthPx: 1,
+        borderOpacity: 0.35,
+        glowIntensity: 0.35,
+        shadowIntensity: 0.85,
+        showPlatformTitle: true,
+        showSubtitle: true,
+        showLinkDomain: false,
+        showQrGlobal: false,
+        iconSizePx: 44
+      },
+      typography: {
+        fontPreset: 'display',
+        textShadowMode: 'soft',
+        textStrokePx: 0
+      },
+      animation: {
+        style: 'center-split',
+        direction: 'left',
+        easing: 'expo',
+        idleMotion: 'none',
+        shimmerSweep: true,
+        progressStyle: 'side-bar'
+      }
+    },
+    'ghost-overlay': {
+      appearance: {
+        theme: 'pure-text',
+        layout: 'floating-badge',
+        fontFamily: 'russo',
+        borderRadiusPx: 16,
+        bgOpacity: 0.0,
+        bgColor: '#000000',
+        textColor: '#ffffff',
+        blurPx: 0,
+        borderWidthPx: 0,
+        borderOpacity: 0.0,
+        glowIntensity: 0.85,
+        shadowIntensity: 0.0,
+        showPlatformTitle: true,
+        showSubtitle: true,
+        showLinkDomain: false,
+        showQrGlobal: false,
+        iconSizePx: 48
+      },
+      typography: {
+        fontPreset: 'russo',
+        textShadowMode: 'strong',
+        textShadowStrength: 0.95,
+        textStrokePx: 1.25,
+        textStrokeColor: '#000000'
+      },
+      animation: {
+        style: 'wave-slide',
+        direction: 'left',
+        easing: 'spring',
+        idleMotion: 'float',
+        shimmerSweep: false,
+        progressStyle: 'none'
+      }
+    },
+    'sport-skew': {
+      appearance: {
+        theme: 'streamer-pro',
+        layout: 'skew',
+        fontFamily: 'play',
+        borderRadiusPx: 8,
+        bgOpacity: 0.9,
+        bgColor: '#0a0e1a',
+        textColor: '#ffffff',
+        blurPx: 10,
+        borderWidthPx: 1.5,
+        borderOpacity: 0.55,
+        glowIntensity: 0.7,
+        shadowIntensity: 0.85,
+        showPlatformTitle: true,
+        showSubtitle: true,
+        showLinkDomain: false,
+        showQrGlobal: false,
+        iconSizePx: 44
+      },
+      typography: {
+        fontPreset: 'play',
+        textShadowMode: 'strong',
+        textStrokePx: 0
+      },
+      animation: {
+        style: 'swing-3d',
+        direction: 'left',
+        easing: 'expo',
+        idleMotion: 'pulse-glow',
+        shimmerSweep: true,
+        progressStyle: 'bottom-bar'
+      }
+    },
+    'qr-showcase': {
+      appearance: {
+        theme: 'holo-border',
+        layout: 'showcase',
+        fontFamily: 'geometric',
+        borderRadiusPx: 20,
+        bgOpacity: 0.88,
+        bgColor: '#0d111e',
+        textColor: '#ffffff',
+        blurPx: 16,
+        borderWidthPx: 1.5,
+        borderOpacity: 0.5,
+        glowIntensity: 0.8,
+        shadowIntensity: 0.85,
+        showPlatformTitle: true,
+        showSubtitle: true,
+        showLinkDomain: true,
+        showQrGlobal: true,
+        qrSizePx: 84,
+        iconSizePx: 48
+      },
+      typography: {
+        fontPreset: 'geometric',
+        textShadowMode: 'soft',
+        textStrokePx: 0
+      },
+      animation: {
+        style: 'flip-3d',
+        direction: 'bottom',
+        easing: 'spring',
+        idleMotion: 'breathe',
+        shimmerSweep: true,
+        progressStyle: 'glow-edge'
       }
     }
   };
@@ -702,12 +1040,24 @@
   function applyStylePreset(config, presetId) {
     var preset = STYLE_PRESETS[presetId];
     if (!preset) return config;
+    var def = getDefaultConfig();
     var next = clone(config);
     if (preset.appearance) {
       Object.assign(next.appearance, preset.appearance);
-      if (preset.appearance.fontFamily && next.typography) {
-        next.typography.fontPreset = preset.appearance.fontFamily;
-      }
+    }
+    if (!next.typography) next.typography = clone(def.typography);
+    next.typography.handleSizePx = def.typography.handleSizePx;
+    next.typography.titleSizePx = def.typography.titleSizePx;
+    next.typography.subtitleSizePx = def.typography.subtitleSizePx;
+    next.typography.textShadowMode = def.typography.textShadowMode;
+    next.typography.textShadowStrength = def.typography.textShadowStrength;
+    next.typography.textStrokePx = def.typography.textStrokePx;
+    next.typography.subtitleColorMode = def.typography.subtitleColorMode;
+    if (preset.appearance && preset.appearance.fontFamily) {
+      next.typography.fontPreset = preset.appearance.fontFamily;
+    }
+    if (preset.typography) {
+      Object.assign(next.typography, preset.typography);
     }
     if (preset.animation) {
       Object.assign(next.animation, preset.animation);

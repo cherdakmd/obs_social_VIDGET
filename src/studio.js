@@ -43,6 +43,7 @@
     var catalogSearchQuery = '';
     var catalogCategory = 'all';
     var resetConfirmOpen = false;
+    var activePresetId = '';
     var toastTimer = null;
     var dragSrcId = null;
 
@@ -82,6 +83,9 @@
       var next = Config.resetSection(cur, target);
       if (target === 'all') {
         selectedItemId = null;
+      }
+      if (target === 'all' || target === 'look' || target === 'design') {
+        activePresetId = '';
       }
       resetConfirmOpen = false;
       store.set(next, { source: 'reset' });
@@ -940,23 +944,39 @@
     function renderDesignTab(bodyEl, cfg) {
       var ap = cfg.appearance;
       var ty = cfg.typography || {};
+      var anim = cfg.animation || {};
       var lang = cfg.lang;
-      var presets = [
-        { id: 'glass-neon', key: 'presetGlassNeon' },
-        { id: 'cyber-pill', key: 'presetCyberPill' },
-        { id: 'minimal-clean', key: 'presetMinimalClean' },
-        { id: 'liquid-gradient', key: 'presetLiquidGradient' },
-        { id: 'streamer-pro', key: 'presetStreamerPro' },
-        { id: 'retro-pop', key: 'presetRetroPop' },
-        { id: 'compact-qr', key: 'presetCompactQr' }
-      ];
+      var presetIds = Object.keys(Config.STYLE_PRESETS);
+      var presetDict = t('presets') || {};
+      var themeDict = t('themes') || {};
+      var layoutDict = t('layouts') || {};
+
+      function isPresetMatch(pid) {
+        if (activePresetId) return activePresetId === pid;
+        var pr = Config.STYLE_PRESETS[pid];
+        if (!pr || !pr.appearance) return false;
+        return pr.appearance.theme === ap.theme &&
+          pr.appearance.layout === ap.layout &&
+          (!pr.animation || pr.animation.style === anim.style);
+      }
 
       bodyEl.innerHTML =
         '<div class="section-box">' +
-          '<div class="section-title">' + escapeHtml(t('presetsTitle')) + '</div>' +
+          '<div class="section-title">' +
+            '<span>' + escapeHtml(t('presetsTitle')) + ' (' + presetIds.length + ')</span>' +
+          '</div>' +
           '<div class="preset-grid">' +
-            presets.map(function (pr) {
-              return '<button class="preset-btn ' + (ap.theme === pr.id ? 'active' : '') + '" data-apply-preset="' + pr.id + '"><span>' + escapeHtml(t(pr.key)) + '</span><span>✦</span></button>';
+            presetIds.map(function (pid) {
+              var pr = Config.STYLE_PRESETS[pid];
+              var bgHex = (pr && pr.appearance && pr.appearance.bgColor) || '#0c101b';
+              var txtHex = (pr && pr.appearance && pr.appearance.textColor) || '#ffffff';
+              var isAct = isPresetMatch(pid);
+              return (
+                '<button class="preset-btn ' + (isAct ? 'active' : '') + '" data-apply-preset="' + pid + '">' +
+                  '<span>' + escapeHtml(presetDict[pid] || pid) + '</span>' +
+                  '<span class="preset-swatch" style="background:' + escapeHtml(bgHex) + ';border-color:' + escapeHtml(txtHex) + ';"></span>' +
+                '</button>'
+              );
             }).join('') +
           '</div>' +
         '</div>' +
@@ -965,8 +985,8 @@
           '<div class="field-group">' +
             '<span class="field-label">' + escapeHtml(t('themeLabel')) + '</span>' +
             '<select class="select" data-ap="theme">' +
-              presets.map(function (pr) {
-                return '<option value="' + pr.id + '"' + (ap.theme === pr.id ? ' selected' : '') + '>' + escapeHtml(t(pr.key)) + '</option>';
+              Config.THEMES.map(function (th) {
+                return '<option value="' + th + '"' + (ap.theme === th ? ' selected' : '') + '>' + escapeHtml(themeDict[th] || th) + '</option>';
               }).join('') +
             '</select>' +
           '</div>' +
@@ -974,10 +994,9 @@
             '<div class="field-group">' +
               '<span class="field-label">' + escapeHtml(t('layoutLabel')) + '</span>' +
               '<select class="select" data-ap="layout">' +
-                '<option value="card"' + (ap.layout === 'card' ? ' selected' : '') + '>' + escapeHtml(t('layoutCard')) + '</option>' +
-                '<option value="pill"' + (ap.layout === 'pill' ? ' selected' : '') + '>' + escapeHtml(t('layoutPill')) + '</option>' +
-                '<option value="split"' + (ap.layout === 'split' ? ' selected' : '') + '>' + escapeHtml(t('layoutSplit')) + '</option>' +
-                '<option value="vertical"' + (ap.layout === 'vertical' ? ' selected' : '') + '>' + escapeHtml(t('layoutVertical')) + '</option>' +
+                Config.LAYOUTS.map(function (ly) {
+                  return '<option value="' + ly + '"' + (ap.layout === ly ? ' selected' : '') + '>' + escapeHtml(layoutDict[ly] || ly) + '</option>';
+                }).join('') +
               '</select>' +
             '</div>' +
             '<div class="field-group">' +
@@ -1032,6 +1051,7 @@
       bodyEl.querySelectorAll('[data-apply-preset]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var pid = btn.getAttribute('data-apply-preset');
+          activePresetId = pid;
           store.update(function (d) {
             return Config.applyStylePreset(d, pid);
           }, { source: 'studio-input' });
@@ -1500,15 +1520,19 @@
             val = el.value;
           }
 
+          if (sectionKey === 'appearance' || sectionKey === 'animation') {
+            activePresetId = '';
+          }
+
           store.update(function (d) {
             if (!d[sectionKey]) d[sectionKey] = {};
             d[sectionKey][key] = val;
           }, { source: 'studio-input' });
 
-          if (replayOnSelectChange && (key === 'direction' || key === 'easing' || key === 'progressStyle')) {
+          if (replayOnSelectChange && (key === 'direction' || key === 'easing' || key === 'progressStyle' || key === 'idleMotion')) {
             playback.replay();
           }
-          if (key === 'showQrGlobal' || key === 'layout' || key === 'showPlatformTitle' || key === 'showSubtitle' || key === 'showLinkDomain') {
+          if (key === 'theme' || key === 'showQrGlobal' || key === 'layout' || key === 'showPlatformTitle' || key === 'showSubtitle' || key === 'showLinkDomain') {
             playback.refreshCurrentCard();
           }
         });
