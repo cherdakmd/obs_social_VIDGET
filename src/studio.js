@@ -38,6 +38,11 @@
     var activeTab = 'socials';
     var selectedItemId = null;
     var iconSearchQuery = '';
+    var iconCategory = 'all';
+    var catalogOpen = false;
+    var catalogSearchQuery = '';
+    var catalogCategory = 'all';
+    var resetConfirmOpen = false;
     var toastTimer = null;
     var dragSrcId = null;
 
@@ -70,6 +75,19 @@
         return items[0];
       }
       return found;
+    }
+
+    function applyReset(target) {
+      var cur = store.get();
+      var next = Config.resetSection(cur, target);
+      if (target === 'all') {
+        selectedItemId = null;
+      }
+      resetConfirmOpen = false;
+      store.set(next, { source: 'reset' });
+      renderShell();
+      playback.replay();
+      showToast(t('resetDoneToast'));
     }
 
     function processImageFile(file, itemId) {
@@ -181,6 +199,17 @@
       cb();
     }
 
+    function renderCategoryPills(activeCat, lang, attrName) {
+      var cats = Icons.getCategories(lang);
+      return (
+        '<div class="cat-pills">' +
+          cats.map(function (c) {
+            return '<button class="cat-pill ' + (activeCat === c.id ? 'active' : '') + '" ' + attrName + '="' + c.id + '">' + escapeHtml(c.label) + '</button>';
+          }).join('') +
+        '</div>'
+      );
+    }
+
     function renderShell() {
       if (options.onBeforeRender) {
         options.onBeforeRender();
@@ -209,12 +238,23 @@
             '</div>' +
           '</div>' +
           '<div class="studio-header-actions">' +
+            '<button class="btn sm danger ' + (resetConfirmOpen ? 'active' : '') + '" data-action="open-reset" title="' + escapeHtml(t('resetDefaultsBtn')) + '">↺ ' + escapeHtml(t('resetQuickBtn')) + '</button>' +
             '<button class="btn sm" data-action="toggle-lang" title="RU / EN">' + langOther + '</button>' +
             (!isDockMode
               ? '<button class="btn sm success" data-action="close-studio">✓ ' + escapeHtml(t('doneHide')) + '</button>'
               : '') +
           '</div>' +
         '</div>' +
+        (resetConfirmOpen
+          ? '<div class="reset-confirm-bar" role="alert">' +
+              '<div class="reset-confirm-title">' + escapeHtml(t('resetBannerTitle')) + '</div>' +
+              '<div class="reset-confirm-actions">' +
+                '<button class="btn sm primary" data-confirm-reset="look">' + escapeHtml(t('resetLookOnlyBtn')) + '</button>' +
+                '<button class="btn sm danger" data-confirm-reset="all">' + escapeHtml(t('resetAllBtn')) + '</button>' +
+                '<button class="btn sm" data-action="cancel-reset">' + escapeHtml(t('resetCancelBtn')) + '</button>' +
+              '</div>' +
+            '</div>'
+          : '') +
         '<div class="dock-preview-box">' +
           '<div class="dock-preview-bar">' +
             '<span>' + escapeHtml(t('previewStageLabel')) + '</span>' +
@@ -245,6 +285,7 @@
         '<div class="studio-tabs">' +
           '<button class="tab-btn ' + (activeTab === 'socials' ? 'active' : '') + '" data-tab="socials">' + escapeHtml(t('tabSocials')) + '</button>' +
           '<button class="tab-btn ' + (activeTab === 'design' ? 'active' : '') + '" data-tab="design">' + escapeHtml(t('tabDesign')) + '</button>' +
+          '<button class="tab-btn ' + (activeTab === 'font' ? 'active' : '') + '" data-tab="font">' + escapeHtml(t('tabFont')) + '</button>' +
           '<button class="tab-btn ' + (activeTab === 'motion' ? 'active' : '') + '" data-tab="motion">' + escapeHtml(t('tabMotion')) + '</button>' +
           '<button class="tab-btn ' + (activeTab === 'obs' ? 'active' : '') + '" data-tab="obs">' + escapeHtml(t('tabObs')) + '</button>' +
         '</div>' +
@@ -290,6 +331,28 @@
 
       var closeBtn = rootEl.querySelector('[data-action="close-studio"]');
       if (closeBtn) closeBtn.addEventListener('click', onClose);
+
+      var openResetBtn = rootEl.querySelector('[data-action="open-reset"]');
+      if (openResetBtn) {
+        openResetBtn.addEventListener('click', function () {
+          resetConfirmOpen = !resetConfirmOpen;
+          renderShell();
+        });
+      }
+
+      var cancelResetBtn = rootEl.querySelector('[data-action="cancel-reset"]');
+      if (cancelResetBtn) {
+        cancelResetBtn.addEventListener('click', function () {
+          resetConfirmOpen = false;
+          renderShell();
+        });
+      }
+
+      rootEl.querySelectorAll('[data-confirm-reset]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          applyReset(btn.getAttribute('data-confirm-reset'));
+        });
+      });
 
       var langBtn = rootEl.querySelector('[data-action="toggle-lang"]');
       if (langBtn) {
@@ -338,13 +401,43 @@
 
       if (activeTab === 'socials') renderSocialsTab(bodyEl, cfg);
       else if (activeTab === 'design') renderDesignTab(bodyEl, cfg);
+      else if (activeTab === 'font') renderFontTab(bodyEl, cfg);
       else if (activeTab === 'motion') renderMotionTab(bodyEl, cfg);
       else renderObsTab(bodyEl, cfg);
+    }
+
+    function buildCatalogGridHtml(matches) {
+      if (!matches.length) {
+        return '<div class="icon-empty-msg">' + escapeHtml(t('iconNoMatches')) + '</div>';
+      }
+      return matches.map(function (p) {
+        return (
+          '<button class="icon-tile-btn" data-quick-add="' + p.id + '" style="--tile-color:' + p.accentColor + '" title="' + escapeHtml(p.name) + '">' +
+            p.svg +
+            '<span class="icon-tile-label">' + escapeHtml(p.name) + '</span>' +
+          '</button>'
+        );
+      }).join('');
+    }
+
+    function buildIconPickerHtml(matches, selected) {
+      if (!matches.length) {
+        return '<div class="icon-empty-msg">' + escapeHtml(t('iconNoMatches')) + '</div>';
+      }
+      return matches.map(function (p) {
+        var isAct = selected && selected.iconType === 'preset' && (selected.iconPreset || selected.platform) === p.id;
+        return (
+          '<button class="icon-pick-btn ' + (isAct ? 'active' : '') + '" data-pick-icon="' + p.id + '" title="' + escapeHtml(p.name) + '" style="color:' + p.accentColor + '">' +
+            p.svg +
+          '</button>'
+        );
+      }).join('');
     }
 
     function renderSocialsTab(bodyEl, cfg) {
       var selected = ensureSelectedItem(cfg);
       var currentLiveId = playback.getCurrentItemId();
+      var totalIcons = Icons.PLATFORMS.length;
 
       var quickChipsHtml = QUICK_PLATFORMS.map(function (pid) {
         var p = Icons.getPlatform(pid);
@@ -355,6 +448,8 @@
           '</button>'
         );
       }).join('');
+
+      var catalogMatches = Icons.searchPlatforms(catalogSearchQuery, catalogCategory);
 
       var listHtml = cfg.items.length
         ? cfg.items.map(function (item, idx) {
@@ -383,15 +478,8 @@
 
       var editorHtml = '';
       if (selected) {
-        var iconPlatforms = Icons.searchPlatforms(iconSearchQuery);
-        var pickerHtml = iconPlatforms.map(function (p) {
-          var isAct = selected.iconType === 'preset' && (selected.iconPreset || selected.platform) === p.id;
-          return (
-            '<button class="icon-pick-btn ' + (isAct ? 'active' : '') + '" data-pick-icon="' + p.id + '" title="' + escapeHtml(p.name) + '" style="color:' + p.accentColor + '">' +
-              p.svg +
-            '</button>'
-          );
-        }).join('');
+        var iconPlatforms = Icons.searchPlatforms(iconSearchQuery, iconCategory);
+        var pickerHtml = buildIconPickerHtml(iconPlatforms, selected);
 
         editorHtml =
           '<div class="section-box" data-editor-id="' + escapeHtml(selected.id) + '">' +
@@ -458,7 +546,7 @@
 
             '<div class="field-group">' +
               '<span class="field-label">' +
-                '<span>' + escapeHtml(t('iconSectionTitle')) + '</span>' +
+                '<span>' + escapeHtml(t('iconSectionTitle')) + ' (' + totalIcons + ' ' + escapeHtml(t('iconCountSuffix')) + ')</span>' +
                 '<select class="select" data-edit="iconColorMode" style="width:auto;padding:3px 8px;font-size:11px;">' +
                   '<option value="brand"' + (selected.iconColorMode === 'brand' ? ' selected' : '') + '>' + escapeHtml(t('iconColorBrand')) + '</option>' +
                   '<option value="white"' + (selected.iconColorMode === 'white' ? ' selected' : '') + '>' + escapeHtml(t('iconColorWhite')) + '</option>' +
@@ -475,8 +563,9 @@
 
             (selected.iconType === 'preset'
               ? '<div class="field-group">' +
+                  renderCategoryPills(iconCategory, cfg.lang, 'data-icon-cat') +
                   '<input class="input" type="search" data-action="search-icons" value="' + escapeHtml(iconSearchQuery) + '" placeholder="' + escapeHtml(t('iconSearchPlaceholder')) + '">' +
-                  '<div class="icon-picker-grid">' + pickerHtml + '</div>' +
+                  '<div class="icon-picker-grid" id="icon-picker-grid">' + pickerHtml + '</div>' +
                 '</div>'
               : '') +
 
@@ -511,9 +600,23 @@
         '<div class="section-box">' +
           '<div class="section-title">' +
             '<span>' + escapeHtml(t('quickAddLabel')) + '</span>' +
-            '<button class="btn sm primary" data-action="add-custom">' + escapeHtml(t('addCustomSocial')) + '</button>' +
+            '<div class="toolbar-group">' +
+              '<button class="btn sm ' + (catalogOpen ? 'active' : '') + '" data-action="toggle-catalog">' + escapeHtml(t('quickAddAllBtn')) + ' (' + totalIcons + ')</button>' +
+              '<button class="btn sm primary" data-action="add-custom">' + escapeHtml(t('addCustomSocial')) + '</button>' +
+            '</div>' +
           '</div>' +
           '<div class="quick-add-grid">' + quickChipsHtml + '</div>' +
+          (catalogOpen
+            ? '<div class="icon-catalog-drawer">' +
+                '<div class="section-title" style="font-size:11px;">' +
+                  '<span>' + escapeHtml(t('iconCatalogTitle')) + '</span>' +
+                  '<span style="text-transform:none;font-weight:500;">' + escapeHtml(t('iconCatalogHint')) + '</span>' +
+                '</div>' +
+                renderCategoryPills(catalogCategory, cfg.lang, 'data-catalog-cat') +
+                '<input class="input" type="search" data-action="search-catalog" value="' + escapeHtml(catalogSearchQuery) + '" placeholder="' + escapeHtml(t('iconSearchPlaceholder')) + '">' +
+                '<div class="icon-catalog-grid" id="icon-catalog-grid">' + buildCatalogGridHtml(catalogMatches) + '</div>' +
+              '</div>'
+            : '') +
         '</div>' +
 
         '<div class="section-box">' +
@@ -529,22 +632,59 @@
     }
 
     function bindSocialsEvents(bodyEl) {
-      bodyEl.querySelectorAll('[data-quick-add]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          var pid = btn.getAttribute('data-quick-add');
-          var newItem = Config.createItemFromPlatform(pid);
-          store.update(function (d) { d.items.push(newItem); });
-          selectedItemId = newItem.id;
-          playback.jumpToItem(newItem.id);
+      function bindQuickAddButtons(scopeEl) {
+        scopeEl.querySelectorAll('[data-quick-add]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var pid = btn.getAttribute('data-quick-add');
+            var newItem = Config.createItemFromPlatform(pid);
+            store.update(function (d) { d.items.push(newItem); });
+            selectedItemId = newItem.id;
+            playback.jumpToItem(newItem.id);
+            renderBody();
+          });
+        });
+      }
+      bindQuickAddButtons(bodyEl);
+
+      var toggleCatBtn = bodyEl.querySelector('[data-action="toggle-catalog"]');
+      if (toggleCatBtn) {
+        toggleCatBtn.addEventListener('click', function () {
+          catalogOpen = !catalogOpen;
           renderBody();
         });
+      }
+
+      bodyEl.querySelectorAll('[data-catalog-cat]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          catalogCategory = btn.getAttribute('data-catalog-cat');
+          bodyEl.querySelectorAll('[data-catalog-cat]').forEach(function (b) {
+            b.classList.toggle('active', b === btn);
+          });
+          var grid = bodyEl.querySelector('#icon-catalog-grid');
+          if (grid) {
+            grid.innerHTML = buildCatalogGridHtml(Icons.searchPlatforms(catalogSearchQuery, catalogCategory));
+            bindQuickAddButtons(grid);
+          }
+        });
       });
+
+      var searchCatalog = bodyEl.querySelector('[data-action="search-catalog"]');
+      if (searchCatalog) {
+        searchCatalog.addEventListener('input', function () {
+          catalogSearchQuery = searchCatalog.value;
+          var grid = bodyEl.querySelector('#icon-catalog-grid');
+          if (grid) {
+            grid.innerHTML = buildCatalogGridHtml(Icons.searchPlatforms(catalogSearchQuery, catalogCategory));
+            bindQuickAddButtons(grid);
+          }
+        });
+      }
 
       var addCustomBtn = bodyEl.querySelector('[data-action="add-custom"]');
       if (addCustomBtn) {
         addCustomBtn.addEventListener('click', function () {
           var newItem = Config.createItemFromPlatform('link', {
-            title: cfgLangTitle(),
+            title: store.get().lang === 'ru' ? 'Ссылка' : 'Link',
             handle: '@custom_link'
           });
           store.update(function (d) { d.items.push(newItem); });
@@ -552,10 +692,6 @@
           playback.jumpToItem(newItem.id);
           renderBody();
         });
-      }
-
-      function cfgLangTitle() {
-        return store.get().lang === 'ru' ? 'Ссылка' : 'Link';
       }
 
       bodyEl.querySelectorAll('.social-row').forEach(function (row) {
@@ -730,23 +866,29 @@
         });
       });
 
+      function refreshIconPickerGrid() {
+        var grid = editorBox.querySelector('#icon-picker-grid');
+        if (!grid) return;
+        var cur = store.get().items.find(function (x) { return x.id === itemId; });
+        grid.innerHTML = buildIconPickerHtml(Icons.searchPlatforms(iconSearchQuery, iconCategory), cur);
+        bindIconPickButtons();
+      }
+
+      editorBox.querySelectorAll('[data-icon-cat]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          iconCategory = btn.getAttribute('data-icon-cat');
+          editorBox.querySelectorAll('[data-icon-cat]').forEach(function (b) {
+            b.classList.toggle('active', b === btn);
+          });
+          refreshIconPickerGrid();
+        });
+      });
+
       var searchIcons = editorBox.querySelector('[data-action="search-icons"]');
       if (searchIcons) {
         searchIcons.addEventListener('input', function () {
           iconSearchQuery = searchIcons.value;
-          var grid = editorBox.querySelector('.icon-picker-grid');
-          if (!grid) return;
-          var cur = store.get().items.find(function (x) { return x.id === itemId; });
-          var matches = Icons.searchPlatforms(iconSearchQuery);
-          grid.innerHTML = matches.map(function (p) {
-            var isAct = cur && cur.iconType === 'preset' && (cur.iconPreset || cur.platform) === p.id;
-            return (
-              '<button class="icon-pick-btn ' + (isAct ? 'active' : '') + '" data-pick-icon="' + p.id + '" title="' + escapeHtml(p.name) + '" style="color:' + p.accentColor + '">' +
-                p.svg +
-              '</button>'
-            );
-          }).join('');
-          bindIconPickButtons();
+          refreshIconPickerGrid();
         });
       }
 
@@ -797,6 +939,8 @@
 
     function renderDesignTab(bodyEl, cfg) {
       var ap = cfg.appearance;
+      var ty = cfg.typography || {};
+      var lang = cfg.lang;
       var presets = [
         { id: 'glass-neon', key: 'presetGlassNeon' },
         { id: 'cyber-pill', key: 'presetCyberPill' },
@@ -838,12 +982,11 @@
             '</div>' +
             '<div class="field-group">' +
               '<span class="field-label">' + escapeHtml(t('fontLabel')) + '</span>' +
-              '<select class="select" data-ap="fontFamily">' +
-                '<option value="modern"' + (ap.fontFamily === 'modern' ? ' selected' : '') + '>' + escapeHtml(t('fontModern')) + '</option>' +
-                '<option value="geometric"' + (ap.fontFamily === 'geometric' ? ' selected' : '') + '>' + escapeHtml(t('fontGeometric')) + '</option>' +
-                '<option value="display"' + (ap.fontFamily === 'display' ? ' selected' : '') + '>' + escapeHtml(t('fontDisplay')) + '</option>' +
-                '<option value="mono"' + (ap.fontFamily === 'mono' ? ' selected' : '') + '>' + escapeHtml(t('fontMono')) + '</option>' +
-                '<option value="rounded"' + (ap.fontFamily === 'rounded' ? ' selected' : '') + '>' + escapeHtml(t('fontRounded')) + '</option>' +
+              '<select class="select" data-action="quick-font-select">' +
+                Config.FONT_PRESETS.map(function (fp) {
+                  var lbl = lang === 'ru' ? fp.labelRu : fp.labelEn;
+                  return '<option value="' + fp.id + '"' + ((ty.fontPreset || ap.fontFamily) === fp.id ? ' selected' : '') + '>' + escapeHtml(lbl) + '</option>';
+                }).join('') +
               '</select>' +
             '</div>' +
           '</div>' +
@@ -880,6 +1023,10 @@
           renderRange('borderOpacity', t('borderOpacityLabel'), Math.round(ap.borderOpacity * 100), 0, 100, 2, '%', 'ap-pct') +
           renderRange('glowIntensity', t('glowLabel'), Math.round(ap.glowIntensity * 100), 0, 100, 2, '%', 'ap-pct') +
           renderRange('shadowIntensity', t('shadowLabel'), Math.round(ap.shadowIntensity * 100), 0, 100, 2, '%', 'ap-pct') +
+        '</div>' +
+
+        '<div class="section-reset-row">' +
+          '<button class="btn sm danger" data-section-reset="design">' + escapeHtml(t('resetDesignBtn')) + '</button>' +
         '</div>';
 
       bodyEl.querySelectorAll('[data-apply-preset]').forEach(function (btn) {
@@ -887,13 +1034,211 @@
           var pid = btn.getAttribute('data-apply-preset');
           store.update(function (d) {
             return Config.applyStylePreset(d, pid);
-          });
+          }, { source: 'studio-input' });
           playback.replay();
           renderBody();
         });
       });
 
+      var quickFontSel = bodyEl.querySelector('[data-action="quick-font-select"]');
+      if (quickFontSel) {
+        quickFontSel.addEventListener('change', function () {
+          store.update(function (d) {
+            d.appearance.fontFamily = quickFontSel.value;
+            if (!d.typography) d.typography = {};
+            d.typography.fontPreset = quickFontSel.value;
+          }, { source: 'studio-input' });
+        });
+      }
+
       bindSectionInputs(bodyEl, 'ap', 'appearance');
+      bindSectionResetButtons(bodyEl);
+    }
+
+    function renderWeightOptions(selectedWeight) {
+      var weights = [300, 400, 500, 600, 700, 800, 900];
+      return weights.map(function (w) {
+        return '<option value="' + w + '"' + (Number(selectedWeight) === w ? ' selected' : '') + '>' + w + '</option>';
+      }).join('');
+    }
+
+    function renderTransformOptions(selectedTransform) {
+      var items = [
+        { id: 'none', key: 'transformNone' },
+        { id: 'uppercase', key: 'transformUpper' },
+        { id: 'lowercase', key: 'transformLower' },
+        { id: 'capitalize', key: 'transformCap' }
+      ];
+      return items.map(function (it) {
+        return '<option value="' + it.id + '"' + (selectedTransform === it.id ? ' selected' : '') + '>' + escapeHtml(t(it.key)) + '</option>';
+      }).join('');
+    }
+
+    function renderColorModeOptions(selectedMode) {
+      var items = [
+        { id: 'accent', key: 'colorModeAccent' },
+        { id: 'text', key: 'colorModeText' },
+        { id: 'custom', key: 'colorModeCustom' }
+      ];
+      return items.map(function (it) {
+        return '<option value="' + it.id + '"' + (selectedMode === it.id ? ' selected' : '') + '>' + escapeHtml(t(it.key)) + '</option>';
+      }).join('');
+    }
+
+    function renderFontTab(bodyEl, cfg) {
+      var ty = cfg.typography;
+      var lang = cfg.lang;
+      var activePreset = ty.fontPreset || cfg.appearance.fontFamily || 'modern';
+
+      bodyEl.innerHTML =
+        '<div class="section-box">' +
+          '<div class="section-title">' + escapeHtml(t('fontFamilySectionTitle')) + '</div>' +
+          '<div class="font-preset-list">' +
+            Config.FONT_PRESETS.map(function (fp) {
+              var lbl = lang === 'ru' ? fp.labelRu : fp.labelEn;
+              var isAct = activePreset === fp.id;
+              return (
+                '<button class="font-preset-card ' + (isAct ? 'active' : '') + '" data-font-preset="' + fp.id + '">' +
+                  '<span style="font-size:12px;font-weight:600;">' + escapeHtml(lbl) + '</span>' +
+                  '<span class="font-preset-sample" style="font-family:' + escapeHtml(fp.stack) + '">Абв Abc</span>' +
+                '</button>'
+              );
+            }).join('') +
+          '</div>' +
+          '<div class="field-group">' +
+            '<span class="field-label">' + escapeHtml(t('customFontLabel')) + '</span>' +
+            '<input class="input" type="text" data-ty="customFontName" value="' + escapeHtml(ty.customFontName) + '" placeholder="' + escapeHtml(t('customFontPlaceholder')) + '">' +
+            '<div class="section-hint">' + escapeHtml(t('customFontHint')) + '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="section-box">' +
+          '<div class="section-title">' + escapeHtml(t('fontHandleSectionTitle')) + '</div>' +
+          renderRange('handleSizePx', t('fontSizeLabel'), ty.handleSizePx, 11, 38, 0.5, 'px', 'ty') +
+          renderRange('handleLetterSpacingPx', t('fontLetterSpacingLabel'), ty.handleLetterSpacingPx, -2, 10, 0.1, 'px', 'ty') +
+          '<div class="row-2">' +
+            '<div class="field-group">' +
+              '<span class="field-label">' + escapeHtml(t('fontWeightLabel')) + '</span>' +
+              '<select class="select" data-ty-num="handleWeight">' + renderWeightOptions(ty.handleWeight) + '</select>' +
+            '</div>' +
+            '<div class="field-group">' +
+              '<span class="field-label">' + escapeHtml(t('fontTransformLabel')) + '</span>' +
+              '<select class="select" data-ty="handleTransform">' + renderTransformOptions(ty.handleTransform) + '</select>' +
+            '</div>' +
+          '</div>' +
+          '<label class="toggle-row"><span>' + escapeHtml(t('fontItalicLabel')) + '</span><input type="checkbox" data-ty="handleItalic"' + (ty.handleItalic ? ' checked' : '') + '></label>' +
+        '</div>' +
+
+        '<div class="section-box">' +
+          '<div class="section-title">' + escapeHtml(t('fontTitleSectionTitle')) + '</div>' +
+          renderRange('titleSizePx', t('fontSizeLabel'), ty.titleSizePx, 8, 26, 0.5, 'px', 'ty') +
+          renderRange('titleLetterSpacingPx', t('fontLetterSpacingLabel'), ty.titleLetterSpacingPx, -1, 10, 0.1, 'px', 'ty') +
+          '<div class="row-2">' +
+            '<div class="field-group">' +
+              '<span class="field-label">' + escapeHtml(t('fontWeightLabel')) + '</span>' +
+              '<select class="select" data-ty-num="titleWeight">' + renderWeightOptions(ty.titleWeight) + '</select>' +
+            '</div>' +
+            '<div class="field-group">' +
+              '<span class="field-label">' + escapeHtml(t('fontTransformLabel')) + '</span>' +
+              '<select class="select" data-ty="titleTransform">' + renderTransformOptions(ty.titleTransform) + '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="row-2">' +
+            '<div class="field-group">' +
+              '<span class="field-label">' + escapeHtml(t('fontColorModeLabel')) + '</span>' +
+              '<select class="select" data-ty="titleColorMode">' + renderColorModeOptions(ty.titleColorMode) + '</select>' +
+            '</div>' +
+            '<div class="field-group" style="' + (ty.titleColorMode === 'custom' ? '' : 'opacity:0.45;pointer-events:none;') + '">' +
+              '<span class="field-label">' + escapeHtml(t('colorModeCustom')) + '</span>' +
+              '<div class="color-row"><input class="color-input" type="color" data-ty="titleCustomColor" value="' + escapeHtml(ty.titleCustomColor) + '"><span class="field-value">' + escapeHtml(ty.titleCustomColor) + '</span></div>' +
+            '</div>' +
+          '</div>' +
+          '<label class="toggle-row"><span>' + escapeHtml(t('fontItalicLabel')) + '</span><input type="checkbox" data-ty="titleItalic"' + (ty.titleItalic ? ' checked' : '') + '></label>' +
+        '</div>' +
+
+        '<div class="section-box">' +
+          '<div class="section-title">' + escapeHtml(t('fontSubtitleSectionTitle')) + '</div>' +
+          renderRange('subtitleSizePx', t('fontSizeLabel'), ty.subtitleSizePx, 8, 26, 0.5, 'px', 'ty') +
+          renderRange('subtitleOpacity', t('fontOpacityLabel'), Math.round(ty.subtitleOpacity * 100), 25, 100, 2, '%', 'ty-pct') +
+          '<div class="row-2">' +
+            '<div class="field-group">' +
+              '<span class="field-label">' + escapeHtml(t('fontWeightLabel')) + '</span>' +
+              '<select class="select" data-ty-num="subtitleWeight">' + renderWeightOptions(ty.subtitleWeight) + '</select>' +
+            '</div>' +
+            '<div class="field-group">' +
+              '<span class="field-label">' + escapeHtml(t('fontTransformLabel')) + '</span>' +
+              '<select class="select" data-ty="subtitleTransform">' + renderTransformOptions(ty.subtitleTransform) + '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="row-2">' +
+            '<div class="field-group">' +
+              '<span class="field-label">' + escapeHtml(t('fontColorModeLabel')) + '</span>' +
+              '<select class="select" data-ty="subtitleColorMode">' + renderColorModeOptions(ty.subtitleColorMode) + '</select>' +
+            '</div>' +
+            '<div class="field-group" style="' + (ty.subtitleColorMode === 'custom' ? '' : 'opacity:0.45;pointer-events:none;') + '">' +
+              '<span class="field-label">' + escapeHtml(t('colorModeCustom')) + '</span>' +
+              '<div class="color-row"><input class="color-input" type="color" data-ty="subtitleCustomColor" value="' + escapeHtml(ty.subtitleCustomColor) + '"><span class="field-value">' + escapeHtml(ty.subtitleCustomColor) + '</span></div>' +
+            '</div>' +
+          '</div>' +
+          '<label class="toggle-row"><span>' + escapeHtml(t('fontItalicLabel')) + '</span><input type="checkbox" data-ty="subtitleItalic"' + (ty.subtitleItalic ? ' checked' : '') + '></label>' +
+        '</div>' +
+
+        '<div class="section-box">' +
+          '<div class="section-title">' + escapeHtml(t('fontEffectsSectionTitle')) + '</div>' +
+          renderRange('lineGapPx', t('lineGapLabel'), ty.lineGapPx, 0, 14, 0.5, 'px', 'ty') +
+          '<div class="field-group">' +
+            '<span class="field-label">' + escapeHtml(t('textShadowModeLabel')) + '</span>' +
+            '<select class="select" data-ty="textShadowMode">' +
+              '<option value="none"' + (ty.textShadowMode === 'none' ? ' selected' : '') + '>' + escapeHtml(t('shadowNone')) + '</option>' +
+              '<option value="soft"' + (ty.textShadowMode === 'soft' ? ' selected' : '') + '>' + escapeHtml(t('shadowSoft')) + '</option>' +
+              '<option value="strong"' + (ty.textShadowMode === 'strong' ? ' selected' : '') + '>' + escapeHtml(t('shadowStrong')) + '</option>' +
+              '<option value="glow"' + (ty.textShadowMode === 'glow' ? ' selected' : '') + '>' + escapeHtml(t('shadowGlow')) + '</option>' +
+            '</select>' +
+          '</div>' +
+          renderRange('textShadowStrength', t('textShadowStrengthLabel'), Math.round(ty.textShadowStrength * 100), 0, 100, 2, '%', 'ty-pct') +
+          renderRange('textStrokePx', t('textStrokePxLabel'), ty.textStrokePx, 0, 3, 0.25, 'px', 'ty') +
+          '<div class="field-group">' +
+            '<span class="field-label">' + escapeHtml(t('textStrokeColorLabel')) + '</span>' +
+            '<div class="color-row"><input class="color-input" type="color" data-ty="textStrokeColor" value="' + escapeHtml(ty.textStrokeColor) + '"><span class="field-value">' + escapeHtml(ty.textStrokeColor) + '</span></div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="section-reset-row">' +
+          '<button class="btn sm danger" data-section-reset="typography">' + escapeHtml(t('resetFontBtn')) + '</button>' +
+        '</div>';
+
+      bodyEl.querySelectorAll('[data-font-preset]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var fid = btn.getAttribute('data-font-preset');
+          store.update(function (d) {
+            if (!d.typography) d.typography = {};
+            d.typography.fontPreset = fid;
+            d.appearance.fontFamily = fid;
+          }, { source: 'studio-input' });
+          bodyEl.querySelectorAll('[data-font-preset]').forEach(function (b) {
+            b.classList.toggle('active', b === btn);
+          });
+        });
+      });
+
+      bodyEl.querySelectorAll('[data-ty-num]').forEach(function (sel) {
+        var key = sel.getAttribute('data-ty-num');
+        sel.addEventListener('change', function () {
+          store.update(function (d) {
+            if (!d.typography) d.typography = {};
+            d.typography[key] = Number(sel.value) || 700;
+          }, { source: 'studio-input' });
+        });
+      });
+
+      bindSectionInputs(bodyEl, 'ty', 'typography');
+      // Re-render color pickers availability when color mode changes
+      bodyEl.querySelectorAll('[data-ty="titleColorMode"], [data-ty="subtitleColorMode"]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          renderBody();
+        });
+      });
+      bindSectionResetButtons(bodyEl);
     }
 
     function renderMotionTab(bodyEl, cfg) {
@@ -967,6 +1312,10 @@
           renderRange('cyclePauseSec', t('cyclePauseLabel'), pb.cyclePauseSec, 0, 300, 5, 's', 'pb') +
           renderRange('staggerMs', t('staggerLabel'), anim.staggerMs, 0, 200, 5, 'ms', 'anim') +
           renderRange('distancePx', t('distanceLabel'), anim.distancePx, 10, 140, 2, 'px', 'anim') +
+        '</div>' +
+
+        '<div class="section-reset-row">' +
+          '<button class="btn sm danger" data-section-reset="animation">' + escapeHtml(t('resetMotionBtn')) + '</button>' +
         '</div>';
 
       bodyEl.querySelectorAll('[data-anim-style]').forEach(function (btn) {
@@ -982,6 +1331,7 @@
 
       bindSectionInputs(bodyEl, 'anim', 'animation', true);
       bindSectionInputs(bodyEl, 'pb', 'playback', false);
+      bindSectionResetButtons(bodyEl);
     }
 
     function renderObsTab(bodyEl, cfg) {
@@ -1104,14 +1454,18 @@
       var resetBtn = bodyEl.querySelector('[data-action="reset-defaults"]');
       if (resetBtn) {
         resetBtn.addEventListener('click', function () {
-          if (typeof confirm !== 'function' || confirm(t('resetConfirm'))) {
-            store.set(Config.getDefaultConfig(), { source: 'reset' });
-            selectedItemId = null;
-            renderShell();
-            playback.replay();
-          }
+          resetConfirmOpen = true;
+          renderShell();
         });
       }
+    }
+
+    function bindSectionResetButtons(container) {
+      container.querySelectorAll('[data-section-reset]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          applyReset(btn.getAttribute('data-section-reset'));
+        });
+      });
     }
 
     function renderRange(key, label, value, min, max, step, unit, attrPrefix) {

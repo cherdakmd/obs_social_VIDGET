@@ -1,11 +1,75 @@
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
-    module.exports = factory(require('./icons.js'), require('./qr.js'));
+    module.exports = factory(require('./icons.js'), require('./qr.js'), require('./config.js'));
   } else {
-    root.ObsSocialRenderer = factory(root.ObsSocialIcons, root.ObsSocialQR);
+    root.ObsSocialRenderer = factory(root.ObsSocialIcons, root.ObsSocialQR, root.ObsSocialConfig);
   }
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (Icons, QR) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (Icons, QR, Config) {
   'use strict';
+
+  var loadedGoogleQuery = '';
+
+  function resolveTypographyMeta(config) {
+    var ap = (config && config.appearance) || {};
+    var ty = (config && config.typography) || {};
+    var presetId = ty.fontPreset || ap.fontFamily || 'modern';
+    var preset = Config && typeof Config.getFontPreset === 'function'
+      ? Config.getFontPreset(presetId)
+      : { id: 'modern', stack: "'Inter', 'Segoe UI', system-ui, sans-serif", googleFamily: '' };
+
+    var customName = typeof ty.customFontName === 'string'
+      ? ty.customFontName.replace(/["'<>\\;]/g, '').trim()
+      : '';
+
+    var stack = preset.stack;
+    var googleFamily = preset.googleFamily || '';
+
+    if (customName) {
+      stack = "'" + customName + "', " + preset.stack;
+      googleFamily = encodeURIComponent(customName).replace(/%20/g, '+') + ':ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,700';
+    }
+
+    return {
+      presetId: preset.id,
+      customName: customName,
+      stack: stack,
+      googleFamily: googleFamily
+    };
+  }
+
+  function ensureFontLoaded(googleFamily, doc) {
+    if (!googleFamily || !doc || !doc.head || typeof doc.createElement !== 'function') return;
+    if (loadedGoogleQuery === googleFamily) return;
+    loadedGoogleQuery = googleFamily;
+    var link = doc.getElementById('obs-dynamic-font-link');
+    if (!link) {
+      link = doc.createElement('link');
+      link.id = 'obs-dynamic-font-link';
+      link.rel = 'stylesheet';
+      doc.head.appendChild(link);
+    }
+    link.href = 'https://fonts.googleapis.com/css2?family=' + googleFamily + '&display=swap';
+  }
+
+  function resolveTextShadowCss(mode, strength, accentRgb) {
+    var s = Number(strength);
+    if (!Number.isFinite(s)) s = 0.55;
+    s = Math.max(0, Math.min(1, s));
+    if (!mode || mode === 'none' || s <= 0.01) return 'none';
+    if (mode === 'strong') {
+      return '0 2px 3px rgba(0, 0, 0, ' + (0.95 * s).toFixed(2) + '), 0 4px 14px rgba(0, 0, 0, ' + (0.75 * s).toFixed(2) + ')';
+    }
+    if (mode === 'glow') {
+      return '0 0 12px rgba(' + accentRgb + ', ' + (0.85 * s).toFixed(2) + '), 0 2px 8px rgba(0, 0, 0, ' + (0.75 * s).toFixed(2) + ')';
+    }
+    return '0 2px 10px rgba(0, 0, 0, ' + (0.65 * s).toFixed(2) + ')';
+  }
+
+  function resolveColorCss(mode, customColor, itemAccent, cardText) {
+    if (mode === 'custom' && customColor) return customColor;
+    if (mode === 'text') return cardText || '#f8fafc';
+    return itemAccent || '#2AABEE';
+  }
 
   function hexToRgbString(hex, fallback) {
     if (typeof hex !== 'string') return fallback || '14, 17, 26';
@@ -67,23 +131,31 @@
   function applyCardStyles(cardEl, item, config, scaleOverride) {
     if (!cardEl || !item || !config) return;
     var ap = config.appearance || {};
+    var ty = config.typography || {};
     var anim = config.animation || {};
+    var fontMeta = resolveTypographyMeta(config);
+
+    if (cardEl.ownerDocument && fontMeta.googleFamily) {
+      ensureFontLoaded(fontMeta.googleFamily, cardEl.ownerDocument);
+    }
 
     cardEl.setAttribute('data-theme', ap.theme || 'glass-neon');
     cardEl.setAttribute('data-layout', ap.layout || 'card');
-    cardEl.setAttribute('data-font', ap.fontFamily || 'modern');
+    cardEl.setAttribute('data-font', fontMeta.presetId);
     cardEl.setAttribute('data-icon-color', item.iconColorMode || 'brand');
     cardEl.setAttribute('data-progress', anim.progressStyle || 'bottom-bar');
 
     var scale = typeof scaleOverride === 'number' ? scaleOverride : Number(ap.scale || 1);
+    var accentRgb = hexToRgbString(item.accentColor, '42, 171, 238');
+    var cardText = ap.textColor || '#f8fafc';
 
     cardEl.style.setProperty('--accent', item.accentColor || '#2AABEE');
-    cardEl.style.setProperty('--accent-rgb', hexToRgbString(item.accentColor, '42, 171, 238'));
+    cardEl.style.setProperty('--accent-rgb', accentRgb);
     cardEl.style.setProperty('--accent2', item.secondaryColor || item.accentColor || '#229ED9');
     cardEl.style.setProperty('--accent2-rgb', hexToRgbString(item.secondaryColor || item.accentColor, '34, 158, 217'));
     cardEl.style.setProperty('--card-bg-rgb', hexToRgbString(ap.bgColor, '12, 16, 27'));
     cardEl.style.setProperty('--card-bg-alpha', String(ap.bgOpacity != null ? ap.bgOpacity : 0.78));
-    cardEl.style.setProperty('--card-text', ap.textColor || '#f8fafc');
+    cardEl.style.setProperty('--card-text', cardText);
     cardEl.style.setProperty('--card-radius', (ap.borderRadiusPx != null ? ap.borderRadiusPx : 18) + 'px');
     cardEl.style.setProperty('--card-max-width', (ap.maxWidthPx || 440) + 'px');
     cardEl.style.setProperty('--card-blur', (ap.blurPx != null ? ap.blurPx : 16) + 'px');
@@ -94,6 +166,44 @@
     cardEl.style.setProperty('--icon-size', (ap.iconSizePx || 44) + 'px');
     cardEl.style.setProperty('--qr-size', (ap.qrSizePx || 64) + 'px');
     cardEl.style.setProperty('--widget-scale', String(scale));
+
+    // Full Font Editor CSS custom properties
+    cardEl.style.setProperty('--font-family', fontMeta.stack);
+    cardEl.style.setProperty('--line-gap', (ty.lineGapPx != null ? ty.lineGapPx : 2) + 'px');
+
+    cardEl.style.setProperty('--handle-size', (ty.handleSizePx != null ? ty.handleSizePx : 19) + 'px');
+    cardEl.style.setProperty('--handle-weight', String(ty.handleWeight || 700));
+    cardEl.style.setProperty('--handle-style', ty.handleItalic ? 'italic' : 'normal');
+    cardEl.style.setProperty('--handle-transform', ty.handleTransform || 'none');
+    cardEl.style.setProperty('--handle-spacing', (ty.handleLetterSpacingPx != null ? ty.handleLetterSpacingPx : -0.3) + 'px');
+
+    cardEl.style.setProperty('--title-size', (ty.titleSizePx != null ? ty.titleSizePx : 11) + 'px');
+    cardEl.style.setProperty('--title-weight', String(ty.titleWeight || 700));
+    cardEl.style.setProperty('--title-style', ty.titleItalic ? 'italic' : 'normal');
+    cardEl.style.setProperty('--title-transform', ty.titleTransform || 'uppercase');
+    cardEl.style.setProperty('--title-spacing', (ty.titleLetterSpacingPx != null ? ty.titleLetterSpacingPx : 1.1) + 'px');
+    cardEl.style.setProperty(
+      '--title-color',
+      resolveColorCss(ty.titleColorMode || 'accent', ty.titleCustomColor, item.accentColor, cardText)
+    );
+
+    cardEl.style.setProperty('--subtitle-size', (ty.subtitleSizePx != null ? ty.subtitleSizePx : 12.5) + 'px');
+    cardEl.style.setProperty('--subtitle-weight', String(ty.subtitleWeight || 500));
+    cardEl.style.setProperty('--subtitle-style', ty.subtitleItalic ? 'italic' : 'normal');
+    cardEl.style.setProperty('--subtitle-transform', ty.subtitleTransform || 'none');
+    cardEl.style.setProperty('--subtitle-opacity', String(ty.subtitleOpacity != null ? ty.subtitleOpacity : 0.78));
+    cardEl.style.setProperty(
+      '--subtitle-color',
+      resolveColorCss(ty.subtitleColorMode || 'text', ty.subtitleCustomColor, item.accentColor, cardText)
+    );
+
+    cardEl.style.setProperty(
+      '--text-shadow-css',
+      resolveTextShadowCss(ty.textShadowMode || 'soft', ty.textShadowStrength, accentRgb)
+    );
+    var strokeW = Number(ty.textStrokePx || 0);
+    cardEl.style.setProperty('--text-stroke-w', strokeW > 0 ? strokeW + 'px' : '0px');
+    cardEl.style.setProperty('--text-stroke-color', ty.textStrokeColor || '#000000');
   }
 
   function createCardElement(item, config, options) {
@@ -203,6 +313,8 @@
     hexToRgbString: hexToRgbString,
     formatShortUrl: formatShortUrl,
     shouldShowQr: shouldShowQr,
+    resolveTypographyMeta: resolveTypographyMeta,
+    resolveTextShadowCss: resolveTextShadowCss,
     getStructuralSignature: getStructuralSignature,
     applyStagePosition: applyStagePosition,
     applyCardStyles: applyCardStyles,

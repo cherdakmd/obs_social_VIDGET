@@ -117,3 +117,70 @@ test('sanitizeSvg strips scripts, foreignObject, and inline event handlers', () 
   assert.ok(!safe.toLowerCase().includes('onclick'));
   assert.ok(!safe.toLowerCase().includes('javascript:'));
 });
+
+test('expanded icon library provides 60+ categorized icons with bilingual RU/EN search', () => {
+  assert.ok(Icons.PLATFORMS.length >= 60, `Expected 60+ icons, got ${Icons.PLATFORMS.length}`);
+  const cats = Icons.getCategories('ru');
+  assert.equal(cats[0].id, 'all');
+  assert.ok(cats.length >= 5);
+
+  const donateIcons = Icons.searchPlatforms('', 'donate');
+  assert.ok(donateIcons.length >= 8);
+  assert.ok(donateIcons.every((p) => p.category === 'donate'));
+
+  const ruMatches = Icons.searchPlatforms('донат');
+  assert.ok(ruMatches.some((p) => p.id === 'donationalerts'));
+
+  const gameMatches = Icons.searchPlatforms('steam', 'gaming');
+  assert.ok(gameMatches.some((p) => p.id === 'steam'));
+
+  assert.ok(Icons.PLATFORMS.every((p) => p.svg.includes('<svg') && p.accentColor.startsWith('#')));
+});
+
+test('typography schema normalizes cleanly and preserves v1.0.0 fontFamily compatibility', () => {
+  const legacy = {
+    appearance: { fontFamily: 'mono' },
+    typography: {
+      customFontName: '"Bad;Font<script>"',
+      handleSizePx: 200,
+      handleWeight: 740,
+      textStrokePx: 9,
+      textShadowMode: 'glow'
+    }
+  };
+  const clean = Config.normalizeConfig(legacy);
+  assert.equal(clean.typography.fontPreset, 'mono');
+  assert.equal(clean.appearance.fontFamily, 'mono');
+  assert.equal(clean.typography.customFontName, 'BadFontscript');
+  assert.equal(clean.typography.handleSizePx, 38);
+  assert.equal(clean.typography.handleWeight, 700);
+  assert.equal(clean.typography.textStrokePx, 3);
+  assert.equal(clean.typography.textShadowMode, 'glow');
+});
+
+test('resetSection resets targeted config sections and look-only preserves user socials', () => {
+  const cfg = Config.getDefaultConfig();
+  cfg.lang = 'en';
+  cfg.items[0].handle = '@kept_social';
+  cfg.appearance.theme = 'retro-pop';
+  cfg.typography.fontPreset = 'pixel';
+  cfg.typography.handleSizePx = 30;
+  cfg.animation.style = 'flip-3d';
+
+  const resetTypo = Config.resetSection(cfg, 'typography');
+  assert.equal(resetTypo.typography.fontPreset, 'modern');
+  assert.equal(resetTypo.typography.handleSizePx, 19);
+  assert.equal(resetTypo.appearance.theme, 'retro-pop');
+  assert.equal(resetTypo.items[0].handle, '@kept_social');
+
+  const resetLook = Config.resetSection(cfg, 'look');
+  assert.equal(resetLook.appearance.theme, 'glass-neon');
+  assert.equal(resetLook.typography.fontPreset, 'modern');
+  assert.equal(resetLook.animation.style, 'expand-pill');
+  assert.equal(resetLook.items[0].handle, '@kept_social');
+
+  const resetAll = Config.resetSection(cfg, 'all');
+  assert.equal(resetAll.lang, 'en');
+  assert.equal(resetAll.items[0].handle, '@my_stream_tg');
+});
+

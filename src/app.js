@@ -440,7 +440,7 @@
     updateHoverLabels(cfg);
     playback.syncPausedState(cfg);
 
-    if (src === 'studio-input') {
+    if (src === 'studio-input' || src === 'local') {
       playback.refreshCurrentCard();
     } else if (src === 'broadcast' || src === 'storage' || src === 'server-init' || src === 'server-sse' || src === 'import' || src === 'reset') {
       playback.refreshCurrentCard();

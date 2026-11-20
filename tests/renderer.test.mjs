@@ -50,3 +50,46 @@ test('getStructuralSignature changes when QR, layout, or icon changes, stays sta
   cfg.appearance.layout = 'split';
   assert.notEqual(Renderer.getStructuralSignature(item, cfg), s1);
 });
+
+test('resolveTypographyMeta resolves built-in font presets and custom fonts cleanly', () => {
+  const cfg = Config.getDefaultConfig();
+  cfg.typography.fontPreset = 'russo';
+  const russoMeta = Renderer.resolveTypographyMeta(cfg);
+  assert.equal(russoMeta.presetId, 'russo');
+  assert.ok(russoMeta.stack.includes('Russo One'));
+  assert.ok(russoMeta.googleFamily.includes('Russo+One'));
+
+  cfg.typography.customFontName = 'Gilroy';
+  const customMeta = Renderer.resolveTypographyMeta(cfg);
+  assert.ok(customMeta.stack.startsWith("'Gilroy',"));
+  assert.ok(customMeta.googleFamily.includes('Gilroy'));
+});
+
+test('resolveTextShadowCss and applyCardStyles emit complete typography CSS variables', () => {
+  assert.equal(Renderer.resolveTextShadowCss('none', 0.8, '42, 171, 238'), 'none');
+  assert.ok(Renderer.resolveTextShadowCss('glow', 0.8, '42, 171, 238').includes('42, 171, 238'));
+
+  const cfg = Config.getDefaultConfig();
+  cfg.typography.fontPreset = 'tektur';
+  cfg.typography.handleSizePx = 24;
+  cfg.typography.handleItalic = true;
+  cfg.typography.titleColorMode = 'custom';
+  cfg.typography.titleCustomColor = '#ff5500';
+  cfg.typography.textStrokePx = 1.5;
+
+  const props = {};
+  const attrs = {};
+  const mockEl = {
+    setAttribute(k, v) { attrs[k] = v; },
+    style: { setProperty(k, v) { props[k] = v; } }
+  };
+  Renderer.applyCardStyles(mockEl, cfg.items[0], cfg);
+
+  assert.equal(attrs['data-font'], 'tektur');
+  assert.ok(props['--font-family'].includes('Tektur'));
+  assert.equal(props['--handle-size'], '24px');
+  assert.equal(props['--handle-style'], 'italic');
+  assert.equal(props['--title-color'], '#ff5500');
+  assert.equal(props['--text-stroke-w'], '1.5px');
+});
+
