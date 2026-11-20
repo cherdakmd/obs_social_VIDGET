@@ -7,6 +7,8 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const Config = require('./src/config.js');
+const McConfig = require('./src/mc-config.js');
+const McPing = require('./src/mc-ping.js');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,12 +27,16 @@ const MIME_TYPES = {
 };
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const ALLOWED_HTML = new Set(['index.html', 'dock.html', 'minecraft.html', 'minecraft-dock.html']);
+const STATUS_CACHE_TTL_MS = 4000;
 
 export function createObsWidgetServer(options = {}) {
   const rootDir = options.rootDir || __dirname;
   const dataDir = options.dataDir || rootDir;
   const configPath = path.join(dataDir, 'config.json');
+  const mcConfigPath = path.join(dataDir, 'mc-config.json');
   const sseClients = new Set();
+  const statusCache = new Map();
 
   function sendJson(res, status, data) {
     const body = JSON.stringify(data);
@@ -53,22 +59,22 @@ export function createObsWidgetServer(options = {}) {
     }
   }
 
-  async function readStoredConfig() {
+  async function readJsonConfig(filePath, normalizer) {
     try {
-      const raw = await fsp.readFile(configPath, 'utf8');
+      const raw = await fsp.readFile(filePath, 'utf8');
       const parsed = JSON.parse(raw);
-      return Config.normalizeConfig(parsed);
+      return normalizer(parsed);
     } catch (err) {
       if (err && err.code === 'ENOENT') return null;
       return null;
     }
   }
 
-  async function writeStoredConfig(cfg) {
+  async function writeJsonConfig(filePath, cfg) {
     await fsp.mkdir(dataDir, { recursive: true });
-    const tmp = `${configPath}.${process.pid}.${Date.now()}.tmp`;
+    const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
     await fsp.writeFile(tmp, JSON.stringify(cfg, null, 2), 'utf8');
-    await fsp.rename(tmp, configPath);
+    await fsp.rename(tmp, filePath);
   }
 
   function readBody(req) {
@@ -93,7 +99,7 @@ export function createObsWidgetServer(options = {}) {
 
   function resolveStaticPath(pathname) {
     let rel = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
-    if (rel !== 'index.html' && rel !== 'dock.html' && !rel.startsWith('src/')) {
+    if (!ALLOWED_HTML.has(rel) && !rel.startsWith('src/')) {
       return null;
     }
     const normalized = path.normalize(rel);
@@ -105,6 +111,129 @@ export function createObsWidgetServer(options = {}) {
       return null;
     }
     return fullPath;
+  }
+
+  async function handleConfigPut(req, res, filePath, normalizer, sseEvent) {
+    let rawBody;
+    try {
+      rawBody = await readBody(req);
+    } catch (err) {
+      if (err && err.message === 'PAYLOAD_TOO_LARGE') {
+        sendJson(res, 413, { ok: false, error: 'Payload too large' });
+        return;
+      }
+      sendJson(res, 400, { ok: false, error: 'Invalid request stream' });
+      return;
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(rawBody || '{}');
+    } catch {
+      sendJson(res, 400, { ok: false, error: 'Invalid JSON' });
+      return;
+    }
+
+    const candidate = payload && payload.config ? payload.config : payload;
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      sendJson(res, 400, { ok: false, error: 'Invalid config payload' });
+      return;
+    }
+
+    const normalized = normalizer(candidate);
+    await writeJsonConfig(filePath, normalized);
+    broadcastSse(sseEvent, {
+      sender: payload.sender || null,
+      config: normalized
+    });
+    sendJson(res, 200, { ok: true, config: normalized });
+  }
+
+  async function fetchMcStatusFallback(address, edition) {
+    if (typeof fetch !== 'function') return null;
+    const parsed = McPing.parseAddress(address, edition);
+    if (!parsed) return null;
+    const addrParam = parsed.port && ((edition === 'java' && parsed.port !== 25565) || (edition === 'bedrock' && parsed.port !== 19132))
+      ? `${parsed.host}:${parsed.port}`
+      : parsed.host;
+    const endpoint = edition === 'bedrock'
+      ? `https://api.mcstatus.io/v2/status/bedrock/${encodeURIComponent(addrParam)}`
+      : `https://api.mcstatus.io/v2/status/java/${encodeURIComponent(addrParam)}`;
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3500);
+    try {
+      const resp = await fetch(endpoint, { signal: ctrl.signal });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return McPing.normalizeMcStatusIoResponse(data, edition);
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function queryMinecraftStatus(address, edition, source) {
+    const normEdition = edition === 'bedrock' ? 'bedrock' : 'java';
+    const normSource = source === 'server' || source === 'mcstatus' ? source : 'auto';
+    const parsed = McPing.parseAddress(address, normEdition);
+    if (!parsed) {
+      return {
+        ok: false,
+        online: false,
+        edition: normEdition,
+        error: 'Invalid server address'
+      };
+    }
+
+    const cacheKey = `${normEdition}|${normSource}|${parsed.host}:${parsed.port}`;
+    const cached = statusCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < STATUS_CACHE_TTL_MS) {
+      return Object.assign({}, cached.result, { cached: true });
+    }
+
+    let result = null;
+    const pingFn = options.mcPing || McPing.pingServer;
+
+    if (normSource !== 'mcstatus') {
+      result = await pingFn(address, normEdition, {
+        timeoutMs: options.mcPingTimeoutMs || 3200
+      });
+    }
+
+    if (
+      (!result || !result.online) &&
+      normSource !== 'server' &&
+      !McPing.isLocalOrPrivateHost(parsed.host) &&
+      !options.disableRemoteMcStatus
+    ) {
+      const fallback = await fetchMcStatusFallback(address, normEdition);
+      if (fallback && (fallback.online || normSource === 'mcstatus')) {
+        result = fallback;
+      }
+    }
+
+    if (!result) {
+      result = {
+        ok: true,
+        online: false,
+        edition: normEdition,
+        source: normSource,
+        playersOnline: null,
+        playersMax: null,
+        version: '',
+        motd: '',
+        favicon: '',
+        latencyMs: null
+      };
+    }
+
+    if (statusCache.size > 60) {
+      statusCache.clear();
+    }
+    statusCache.set(cacheKey, { ts: Date.now(), result });
+    return result;
   }
 
   const server = http.createServer(async (req, res) => {
@@ -128,45 +257,37 @@ export function createObsWidgetServer(options = {}) {
       }
 
       if (req.method === 'GET' && pathname === '/api/config') {
-        const config = await readStoredConfig();
+        const config = await readJsonConfig(configPath, Config.normalizeConfig);
         sendJson(res, 200, { ok: true, config });
         return;
       }
 
       if (req.method === 'PUT' && pathname === '/api/config') {
-        let rawBody;
-        try {
-          rawBody = await readBody(req);
-        } catch (err) {
-          if (err && err.message === 'PAYLOAD_TOO_LARGE') {
-            sendJson(res, 413, { ok: false, error: 'Payload too large' });
-            return;
-          }
-          sendJson(res, 400, { ok: false, error: 'Invalid request stream' });
+        await handleConfigPut(req, res, configPath, Config.normalizeConfig, 'config-updated');
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/api/mc-config') {
+        const config = await readJsonConfig(mcConfigPath, McConfig.normalizeConfig);
+        sendJson(res, 200, { ok: true, config });
+        return;
+      }
+
+      if (req.method === 'PUT' && pathname === '/api/mc-config') {
+        await handleConfigPut(req, res, mcConfigPath, McConfig.normalizeConfig, 'mc-config-updated');
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/api/mc-status') {
+        const address = urlObj.searchParams.get('address') || urlObj.searchParams.get('ip') || '';
+        const edition = urlObj.searchParams.get('edition') || 'java';
+        const source = urlObj.searchParams.get('source') || 'auto';
+        if (!address.trim()) {
+          sendJson(res, 400, { ok: false, online: false, error: 'Missing server address' });
           return;
         }
-
-        let payload;
-        try {
-          payload = JSON.parse(rawBody || '{}');
-        } catch {
-          sendJson(res, 400, { ok: false, error: 'Invalid JSON' });
-          return;
-        }
-
-        const candidate = payload && payload.config ? payload.config : payload;
-        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
-          sendJson(res, 400, { ok: false, error: 'Invalid config payload' });
-          return;
-        }
-
-        const normalized = Config.normalizeConfig(candidate);
-        await writeStoredConfig(normalized);
-        broadcastSse('config-updated', {
-          sender: payload.sender || null,
-          config: normalized
-        });
-        sendJson(res, 200, { ok: true, config: normalized });
+        const status = await queryMinecraftStatus(address, edition, source);
+        sendJson(res, 200, status);
         return;
       }
 
@@ -259,10 +380,12 @@ if (isMain) {
     console.log('=======================================================');
     console.log('  OBS Social Widget — Live Sync Server Running!');
     console.log('=======================================================');
-    console.log(`  OBS Browser Source : http://127.0.0.1:${port}/`);
-    console.log(`  OBS Custom Dock    : http://127.0.0.1:${port}/dock.html`);
+    console.log(`  Social Overlay     : http://127.0.0.1:${port}/`);
+    console.log(`  Social Dock        : http://127.0.0.1:${port}/dock.html`);
+    console.log(`  Minecraft Overlay  : http://127.0.0.1:${port}/minecraft.html`);
+    console.log(`  Minecraft Dock     : http://127.0.0.1:${port}/minecraft-dock.html`);
     console.log(`  Setup in Browser   : http://127.0.0.1:${port}/?setup=1`);
-    console.log('  Config saved to    : config.json');
+    console.log('  Configs saved to   : config.json / mc-config.json');
     console.log('=======================================================');
     console.log('');
   });

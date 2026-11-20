@@ -1946,3 +1946,152 @@ body.mode-dock .dock-preview-box {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
+
+/* =========================================================
+   MINECRAFT ADDON CARD & STATUS BADGES
+   ========================================================= */
+
+.mc-card .card-text {
+  min-width: 0;
+  gap: var(--line-gap, 3px);
+}
+
+.mc-top-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.social-card[data-layout='vertical'] .mc-top-row,
+.social-card[data-layout='showcase'] .mc-top-row {
+  justify-content: center;
+}
+
+.mc-version-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1.5px 7px;
+  border-radius: 6px;
+  font-size: max(9.5px, calc(var(--title-size, 11px) - 0.5px));
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.03em;
+  color: var(--card-text);
+  background: rgba(var(--accent-rgb), 0.22);
+  border: 1px solid rgba(var(--accent-rgb), 0.42);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.social-card[data-theme='light-minimal'] .mc-version-badge,
+.social-card[data-theme='soft-pastel'] .mc-version-badge {
+  background: rgba(var(--accent-rgb), 0.14);
+  border-color: rgba(var(--accent-rgb), 0.34);
+}
+
+.mc-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1.5px 8px;
+  border-radius: 999px;
+  font-size: max(9.5px, calc(var(--title-size, 11px) - 0.5px));
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--card-text);
+}
+
+.mc-status-pill.is-online {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.46);
+  color: #bbf7d0;
+}
+
+.mc-status-pill.is-offline {
+  background: rgba(244, 63, 94, 0.18);
+  border-color: rgba(244, 63, 94, 0.46);
+  color: #fecdd3;
+}
+
+.social-card[data-theme='light-minimal'] .mc-status-pill.is-online,
+.social-card[data-theme='soft-pastel'] .mc-status-pill.is-online {
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.social-card[data-theme='light-minimal'] .mc-status-pill.is-offline,
+.social-card[data-theme='soft-pastel'] .mc-status-pill.is-offline {
+  color: #be123c;
+  background: rgba(244, 63, 94, 0.14);
+}
+
+.mc-status-dot {
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex-shrink: 0;
+}
+
+.mc-status-pill.is-online .mc-status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.85);
+}
+
+.mc-status-pill.is-offline .mc-status-dot {
+  background: #f43f5e;
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.8);
+}
+
+.mc-ip-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mc-ip-prefix {
+  opacity: 0.72;
+  font-weight: 600;
+  font-size: 0.86em;
+  flex-shrink: 0;
+}
+
+.mc-ip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.social-card[data-layout='ticker'] .mc-top-row {
+  flex-wrap: nowrap;
+}
+
+.mc-live-result {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--studio-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--studio-muted);
+}
+
+.mc-live-result.is-online {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+}
+
+.mc-live-result.is-offline {
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.1);
+  color: #fda4af;
+}
+
