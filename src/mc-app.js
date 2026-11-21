@@ -471,11 +471,24 @@
     var modeChanged = Boolean(lastDisplayMode && lastDisplayMode !== cfg.playback.displayMode);
     lastDisplayMode = cfg.playback.displayMode;
 
+    if (src === 'save-state') {
+      if ((studioOpen || isDockMode) && studio.updateSaveIndicator) {
+        studio.updateSaveIndicator();
+      }
+      return;
+    }
+
     if (modeChanged) {
       playback.replay();
-    } else if (src === 'studio-input' || src === 'local') {
+      if ((studioOpen || isDockMode) && studio.updateSaveIndicator) {
+        studio.updateSaveIndicator();
+      }
+    } else if (src === 'studio-input' || src === 'local' || src === 'drag-canvas') {
       playback.refreshCurrentCard();
-    } else if (src === 'broadcast' || src === 'storage' || src === 'server-init' || src === 'server-sse' || src === 'import' || src === 'reset') {
+      if ((studioOpen || isDockMode) && studio.updateSaveIndicator) {
+        studio.updateSaveIndicator();
+      }
+    } else if (src === 'broadcast' || src === 'storage' || src === 'server-init' || src === 'server-sse' || src === 'import' || src === 'reset' || src === 'undo' || src === 'profile-switch') {
       playback.refreshCurrentCard();
       if (studioOpen || isDockMode) {
         studio.render();
@@ -495,6 +508,152 @@
     }
   });
 
+  function setupCanvasDrag() {
+    if (!slotEl || !mainStageEl || isDockMode || cleanMode) return;
+    var hudBadge = null;
+
+    function ensureHudBadge() {
+      if (!hudBadge) {
+        hudBadge = document.createElement('div');
+        hudBadge.className = 'drag-hud-badge';
+        document.body.appendChild(hudBadge);
+      }
+      return hudBadge;
+    }
+
+    function hideHudBadge() {
+      if (hudBadge) hudBadge.classList.remove('visible');
+    }
+
+    function computeDraggedPosition(startRect, stageRect, dx, dy) {
+      var maxLeft = Math.max(0, stageRect.width - startRect.width);
+      var maxTop = Math.max(0, stageRect.height - startRect.height);
+      var relLeft = Math.max(0, Math.min(maxLeft, (startRect.left - stageRect.left) + dx));
+      var relTop = Math.max(0, Math.min(maxTop, (startRect.top - stageRect.top) + dy));
+      var relRight = Math.max(0, stageRect.width - (relLeft + startRect.width));
+      var relBottom = Math.max(0, stageRect.height - (relTop + startRect.height));
+
+      var centerX = relLeft + startRect.width / 2;
+      var centerY = relTop + startRect.height / 2;
+      var stageMidX = stageRect.width / 2;
+      var stageMidY = stageRect.height / 2;
+
+      var hPart;
+      var offX;
+      if (Math.abs(centerX - stageMidX) <= 14) {
+        hPart = 'center';
+        offX = 0;
+      } else if (centerX <= stageMidX) {
+        hPart = 'left';
+        offX = Math.min(1600, Math.max(0, Math.round(relLeft)));
+      } else {
+        hPart = 'right';
+        offX = Math.min(1600, Math.max(0, Math.round(relRight)));
+      }
+
+      var vPart;
+      var offY;
+      if (Math.abs(centerY - stageMidY) <= 14) {
+        vPart = 'middle';
+        offY = 0;
+      } else if (centerY <= stageMidY) {
+        vPart = 'top';
+        offY = Math.min(950, Math.max(0, Math.round(relTop)));
+      } else {
+        vPart = 'bottom';
+        offY = Math.min(950, Math.max(0, Math.round(relBottom)));
+      }
+
+      var anchor = vPart === 'middle'
+        ? (hPart === 'center' ? 'center' : ('middle-' + hPart))
+        : (vPart + '-' + hPart);
+
+      return { anchor: anchor, offsetX: offX, offsetY: offY };
+    }
+
+    slotEl.addEventListener('pointerdown', function (ev) {
+      if (!studioOpen || isDockMode || ev.button !== 0) return;
+      if (stageEl !== mainStageEl) return;
+
+      var startX = ev.clientX;
+      var startY = ev.clientY;
+      var startRect = slotEl.getBoundingClientRect();
+      var stageRect = mainStageEl.getBoundingClientRect();
+      if (!startRect.width || !stageRect.width) return;
+
+      var dragging = false;
+      var lastPos = null;
+      var pointerId = ev.pointerId;
+
+      function onMove(moveEv) {
+        if (moveEv.pointerId !== pointerId) return;
+        var dx = moveEv.clientX - startX;
+        var dy = moveEv.clientY - startY;
+        if (!dragging && Math.hypot(dx, dy) < 4) return;
+
+        if (!dragging) {
+          dragging = true;
+          slotEl.classList.add('is-dragging');
+          try { slotEl.setPointerCapture(pointerId); } catch (_e) {}
+        }
+
+        lastPos = computeDraggedPosition(startRect, stageRect, dx, dy);
+        var tempCfg = Object.assign({}, store.get(), { position: lastPos });
+        McRenderer.applyStagePosition(mainStageEl, tempCfg, false);
+
+        var badge = ensureHudBadge();
+        badge.textContent = lastPos.anchor + ' · X: ' + lastPos.offsetX + 'px, Y: ' + lastPos.offsetY + 'px';
+        badge.classList.add('visible');
+
+        if (studio && studio.syncPositionInputs) {
+          studio.syncPositionInputs(lastPos);
+        }
+      }
+
+      function cleanup(commit) {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        slotEl.classList.remove('is-dragging');
+        hideHudBadge();
+        try {
+          if (slotEl.hasPointerCapture && slotEl.hasPointerCapture(pointerId)) {
+            slotEl.releasePointerCapture(pointerId);
+          }
+        } catch (_e) {}
+        if (commit && dragging && lastPos) {
+          store.update(function (d) {
+            d.position.anchor = lastPos.anchor;
+            d.position.offsetX = lastPos.offsetX;
+            d.position.offsetY = lastPos.offsetY;
+          }, { source: 'drag-canvas' });
+          if (studio && studio.syncPositionInputs) {
+            studio.syncPositionInputs(lastPos);
+          }
+        }
+      }
+
+      function onUp(upEv) {
+        if (upEv.pointerId !== pointerId) return;
+        cleanup(true);
+      }
+
+      function onCancel(cancelEv) {
+        if (cancelEv.pointerId !== pointerId) return;
+        McRenderer.applyStagePosition(mainStageEl, store.get(), false);
+        if (studio && studio.syncPositionInputs) {
+          studio.syncPositionInputs(store.get().position);
+        }
+        cleanup(false);
+      }
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
+    });
+  }
+  setupCanvasDrag();
+
   function triggerHoverUi() {
     if (cleanMode || isDockMode || studioOpen) return;
     var cfg = store.get();
@@ -510,6 +669,31 @@
     }, 4200);
   }
 
+  window.addEventListener('keydown', function (ev) {
+    if ((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && !ev.altKey) {
+      var k = (ev.key || '').toLowerCase();
+      if (k === 's' || k === 'ы') {
+        if (studioOpen || isDockMode) {
+          ev.preventDefault();
+          if (studio && studio.saveNow) studio.saveNow();
+        }
+        return;
+      }
+      if (k === 'z' || k === 'я') {
+        if (studioOpen || isDockMode) {
+          var tag = ev.target && ev.target.tagName ? ev.target.tagName.toLowerCase() : '';
+          var isTextTyping = (tag === 'textarea') || (ev.target && ev.target.isContentEditable) ||
+            (tag === 'input' && /^(text|url|email|search|password|number)$/i.test(ev.target.type || 'text'));
+          if (!isTextTyping && studio && studio.undo) {
+            if (studio.undo()) {
+              ev.preventDefault();
+            }
+          }
+        }
+      }
+    }
+  });
+
   if (!isDockMode && !cleanMode) {
     window.addEventListener('mousemove', triggerHoverUi, { passive: true });
     window.addEventListener('pointerdown', triggerHoverUi, { passive: true });
@@ -521,6 +705,7 @@
     });
 
     window.addEventListener('keydown', function (ev) {
+      if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
       var tag = ev.target && ev.target.tagName ? ev.target.tagName.toLowerCase() : '';
       var editing = tag === 'input' || tag === 'textarea' || tag === 'select' || (ev.target && ev.target.isContentEditable);
       if (ev.key === 'Escape' && studioOpen) {

@@ -104,7 +104,114 @@ test('sync server serves widget, persists config.json, blocks traversal, and pus
     const getCfgRes = await fetch(`${baseUrl}/api/config`);
     const getCfgJson = await getCfgRes.json();
     assert.equal(getCfgJson.config.items[0].handle, '@stream_live');
+
+    // 6. /api/info returns resolved storage directories
+    const infoRes = await fetch(`${baseUrl}/api/info`);
+    assert.equal(infoRes.status, 200);
+    const infoJson = await infoRes.json();
+    assert.equal(infoJson.ok, true);
+    assert.equal(infoJson.dataDir, tmpDir);
+    assert.ok(infoJson.profilesDir.startsWith(tmpDir));
+    assert.ok(infoJson.uploadsDir.startsWith(tmpDir));
+
+    // 7. POST /api/upload saves PNG and sanitized SVG under /uploads/ and blocks traversal
+    const tinyPngB64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const upPngRes = await fetch(`${baseUrl}/api/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: 'My Icon!.png',
+        dataUrl: `data:image/png;base64,${tinyPngB64}`
+      })
+    });
+    assert.equal(upPngRes.status, 200);
+    const upPng = await upPngRes.json();
+    assert.equal(upPng.ok, true);
+    assert.match(upPng.url, /^\/uploads\/.+\.png$/);
+
+    const fetchedPng = await fetch(`${baseUrl}${upPng.url}`);
+    assert.equal(fetchedPng.status, 200);
+    assert.equal(fetchedPng.headers.get('content-type'), 'image/png');
+    assert.equal(fetchedPng.headers.get('x-content-type-options'), 'nosniff');
+
+    const unsafeSvg = '<svg viewBox="0 0 24 24" onload="alert(1)"><script>hack()</script><circle cx="12" cy="12" r="10"/></svg>';
+    const upSvgRes = await fetch(`${baseUrl}/api/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: 'badge.svg',
+        dataUrl: `data:image/svg+xml;base64,${Buffer.from(unsafeSvg, 'utf8').toString('base64')}`
+      })
+    });
+    assert.equal(upSvgRes.status, 200);
+    const upSvg = await upSvgRes.json();
+    const fetchedSvgText = await (await fetch(`${baseUrl}${upSvg.url}`)).text();
+    assert.ok(fetchedSvgText.includes('<circle'));
+    assert.ok(!fetchedSvgText.includes('<script'));
+    assert.ok(!fetchedSvgText.includes('onload'));
+
+    const badUpload = await fetch(`${baseUrl}/api/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: 'evil.html', dataUrl: 'data:text/html;base64,PGh0bWw+' })
+    });
+    assert.equal(badUpload.status, 400);
+
+    const traversalUpload = await fetch(`${baseUrl}/uploads/..%2Fconfig.json`);
+    assert.equal(traversalUpload.status, 404);
+
+    // 8. Profiles CRUD + ?profile= config isolation for both widgets
+    const createProf = await fetch(`${baseUrl}/api/profiles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Minecraft Scene' })
+    });
+    assert.equal(createProf.status, 200);
+    const profCreated = await createProf.json();
+    assert.equal(profCreated.profile.id, 'minecraft-scene');
+
+    const profPut = await fetch(`${baseUrl}/api/config?profile=${profCreated.profile.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sender: 'prof-test',
+        config: {
+          items: [{ id: 'p1', platform: 'discord', title: 'Discord', handle: 'discord.gg/mc-scene', accentColor: '#5865F2' }]
+        }
+      })
+    });
+    assert.equal(profPut.status, 200);
+
+    // Default profile remained untouched
+    const defaultAfter = await (await fetch(`${baseUrl}/api/config`)).json();
+    assert.equal(defaultAfter.config.items[0].handle, '@stream_live');
+
+    const sceneAfter = await (await fetch(`${baseUrl}/api/config?profile=${profCreated.profile.id}`)).json();
+    assert.equal(sceneAfter.config.items[0].handle, 'discord.gg/mc-scene');
+
+    const listProfs = await (await fetch(`${baseUrl}/api/profiles`)).json();
+    assert.ok(listProfs.profiles.some((p) => p.id === 'default'));
+    assert.ok(listProfs.profiles.some((p) => p.id === 'minecraft-scene'));
+
+    const delDefault = await fetch(`${baseUrl}/api/profiles/default`, { method: 'DELETE' });
+    assert.equal(delDefault.status, 400);
+
+    const delScene = await fetch(`${baseUrl}/api/profiles/${profCreated.profile.id}`, { method: 'DELETE' });
+    assert.equal(delScene.status, 200);
+
+    // MC Profiles CRUD isolation
+    const mcProfRes = await fetch(`${baseUrl}/api/mc-profiles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Bedrock Lobby', config: { server: { name: 'Lobby 2', ip: 'lobby.mc.ru', edition: 'bedrock' } } })
+    });
+    assert.equal(mcProfRes.status, 200);
+    const mcProf = await mcProfRes.json();
+    const mcSceneCfg = await (await fetch(`${baseUrl}/api/mc-config?profile=${mcProf.profile.id}`)).json();
+    assert.equal(mcSceneCfg.config.server.name, 'Lobby 2');
+    assert.equal(mcSceneCfg.config.server.edition, 'bedrock');
   } finally {
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
     await fs.rm(tmpDir, { recursive: true, force: true });
   }

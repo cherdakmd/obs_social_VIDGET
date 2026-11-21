@@ -203,8 +203,8 @@
       typography: baseNorm.typography,
       position: {
         anchor: validEnum(pos.anchor, BaseConfig.ANCHORS, def.position.anchor),
-        offsetX: Math.round(clamp(pos.offsetX, 0, 400, def.position.offsetX)),
-        offsetY: Math.round(clamp(pos.offsetY, 0, 400, def.position.offsetY))
+        offsetX: Math.round(clamp(pos.offsetX, 0, 1600, def.position.offsetX)),
+        offsetY: Math.round(clamp(pos.offsetY, 0, 950, def.position.offsetY))
       },
       obs: baseNorm.obs
     };
@@ -338,6 +338,8 @@
       }
     }
     ov.configFromUrl = cfgParam ? decodeConfigFromParam(cfgParam) : null;
+    ov.cfgRaw = cfgParam || '';
+    ov.forceCfg = params.get('forcecfg') === '1';
     ov.modeOverride = params.get('mode');
     return ov;
   }
@@ -348,25 +350,230 @@
     var channel = null;
     var serverAvailable = false;
     var serverSaveTimer = null;
+    var retryTimer = null;
+    var retryAttempt = 0;
     var eventSource = null;
     var clientId = 'mc-' + Math.random().toString(36).slice(2, 10);
     var current = getDefaultConfig();
+    var dirtySinceInit = false;
+    var appliedUrlCfg = '';
+    var sanitizePid = BaseConfig.sanitizeProfileId || function (v) { return String(v || 'default'); };
+    var slugifyName = BaseConfig.slugifyProfileName || function (v) { return String(v || 'scene'); };
+    var activeProfileId = opts.profile ? sanitizePid(opts.profile) : 'default';
+    var profileLockedByUrl = Boolean(opts.profile);
+    var PROFILES_META_KEY = STORAGE_KEY + '_profiles_meta_v1';
+    var ACTIVE_PROFILE_KEY = STORAGE_KEY + '_active_profile_v1';
+    var IDB_NAME = 'obs_widget_persist_v1';
+    var IDB_STORE = 'configs';
+    var MAX_UNDO = 25;
+    var undoStack = [];
+    var lastUndoPushAt = 0;
+    var lastUndoSource = '';
+    var saveState = {
+      dirty: false,
+      saving: false,
+      lastSavedAt: 0,
+      target: 'local',
+      lastError: false
+    };
+
+    function getStorageKey(pid) {
+      var id = sanitizePid(pid || activeProfileId);
+      return id === 'default' ? STORAGE_KEY : (STORAGE_KEY + '__p__' + id);
+    }
+
+    function getAppliedUrlKey(pid) {
+      return getStorageKey(pid) + '_applied_url';
+    }
+
+    function getWinNamePrefix(pid) {
+      var id = sanitizePid(pid || activeProfileId);
+      return id === 'default' ? '__OBS_MC_STATE_V1__:' : ('__OBS_MC_STATE_V1__' + id + ':');
+    }
+
+    function getApiConfigUrl(pid) {
+      var id = sanitizePid(pid || activeProfileId);
+      return id === 'default' ? '/api/mc-config' : ('/api/mc-config?profile=' + encodeURIComponent(id));
+    }
+
+    function readProfilesMeta() {
+      var list = [{ id: 'default', name: 'default', updatedAt: 0 }];
+      try {
+        if (typeof localStorage !== 'undefined') {
+          var raw = localStorage.getItem(PROFILES_META_KEY);
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach(function (entry) {
+                if (!entry || typeof entry !== 'object') return;
+                var id = sanitizePid(entry.id || entry.name || '');
+                if (id === 'default') return;
+                if (!list.some(function (x) { return x.id === id; })) {
+                  list.push({
+                    id: id,
+                    name: String(entry.name || id).slice(0, 48),
+                    updatedAt: Number(entry.updatedAt) || 0
+                  });
+                }
+              });
+            }
+          }
+        }
+      } catch (_e) {}
+      return list;
+    }
+
+    function writeProfilesMeta(list) {
+      try {
+        if (typeof localStorage === 'undefined') return;
+        var clean = (list || []).filter(function (x) {
+          return x && sanitizePid(x.id) !== 'default';
+        }).map(function (x) {
+          return {
+            id: sanitizePid(x.id),
+            name: String(x.name || x.id).slice(0, 48),
+            updatedAt: Number(x.updatedAt) || Date.now()
+          };
+        });
+        localStorage.setItem(PROFILES_META_KEY, JSON.stringify(clean));
+      } catch (_e) {}
+    }
+
+    function ensureProfileInMeta(id, displayName) {
+      var pid = sanitizePid(id);
+      if (pid === 'default') return;
+      var list = readProfilesMeta();
+      var found = list.find(function (x) { return x.id === pid; });
+      if (found) {
+        if (displayName) found.name = String(displayName).slice(0, 48);
+        found.updatedAt = Date.now();
+      } else {
+        list.push({ id: pid, name: String(displayName || pid).slice(0, 48), updatedAt: Date.now() });
+      }
+      writeProfilesMeta(list);
+    }
 
     function notify(source) {
       var snap = clone(current);
       listeners.forEach(function (fn) {
         try {
-          fn(snap, { source: source, serverAvailable: serverAvailable });
+          fn(snap, {
+            source: source,
+            profile: activeProfileId,
+            serverAvailable: serverAvailable,
+            canUndo: undoStack.length > 0,
+            saveState: Object.assign({}, saveState, { canUndo: undoStack.length > 0 })
+          });
         } catch (err) {
           if (typeof console !== 'undefined' && console.error) console.error(err);
         }
       });
     }
 
+    function readWindowNameState() {
+      try {
+        var prefix = getWinNamePrefix();
+        if (typeof window === 'undefined' || typeof window.name !== 'string') return null;
+        if (window.name.indexOf(prefix) !== 0) return null;
+        var parsed = JSON.parse(window.name.slice(prefix.length));
+        if (!parsed || typeof parsed !== 'object' || !parsed.cfg) return null;
+        return {
+          cfg: normalizeConfig(parsed.cfg),
+          appliedUrlCfg: typeof parsed.appliedUrlCfg === 'string' ? parsed.appliedUrlCfg : '',
+          savedAt: Number(parsed.savedAt) || 0
+        };
+      } catch (_err) {
+        return null;
+      }
+    }
+
+    function writeWindowNameState(cfg, urlCfg) {
+      try {
+        if (typeof window === 'undefined') return;
+        window.name = getWinNamePrefix() + JSON.stringify({
+          cfg: cfg,
+          appliedUrlCfg: urlCfg || '',
+          savedAt: Date.now()
+        });
+      } catch (_err) {}
+    }
+
+    function idbOpen() {
+      return new Promise(function (resolve) {
+        try {
+          if (typeof indexedDB === 'undefined') {
+            resolve(null);
+            return;
+          }
+          var req = indexedDB.open(IDB_NAME, 1);
+          req.onupgradeneeded = function () {
+            try {
+              var db = req.result;
+              if (!db.objectStoreNames.contains(IDB_STORE)) {
+                db.createObjectStore(IDB_STORE);
+              }
+            } catch (_e) {}
+          };
+          req.onsuccess = function () { resolve(req.result); };
+          req.onerror = function () { resolve(null); };
+          req.onblocked = function () { resolve(null); };
+        } catch (_err) {
+          resolve(null);
+        }
+      });
+    }
+
+    function idbReadState() {
+      return idbOpen().then(function (db) {
+        if (!db) return null;
+        return new Promise(function (resolve) {
+          try {
+            var tx = db.transaction(IDB_STORE, 'readonly');
+            var req = tx.objectStore(IDB_STORE).get(getStorageKey());
+            req.onsuccess = function () {
+              var val = req.result;
+              if (val && typeof val === 'object' && val.cfg) {
+                resolve({
+                  cfg: normalizeConfig(val.cfg),
+                  appliedUrlCfg: typeof val.appliedUrlCfg === 'string' ? val.appliedUrlCfg : '',
+                  savedAt: Number(val.savedAt) || 0
+                });
+              } else {
+                resolve(null);
+              }
+            };
+            req.onerror = function () { resolve(null); };
+          } catch (_e) {
+            resolve(null);
+          }
+        });
+      });
+    }
+
+    function idbWriteState(cfg, urlCfg) {
+      return idbOpen().then(function (db) {
+        if (!db) return false;
+        return new Promise(function (resolve) {
+          try {
+            var tx = db.transaction(IDB_STORE, 'readwrite');
+            tx.objectStore(IDB_STORE).put({
+              cfg: cfg,
+              appliedUrlCfg: urlCfg || '',
+              savedAt: Date.now()
+            }, getStorageKey());
+            tx.oncomplete = function () { resolve(true); };
+            tx.onerror = function () { resolve(false); };
+          } catch (_e) {
+            resolve(false);
+          }
+        });
+      });
+    }
+
     function readLocalStorage() {
       try {
         if (typeof localStorage === 'undefined') return null;
-        var raw = localStorage.getItem(STORAGE_KEY);
+        var raw = localStorage.getItem(getStorageKey());
         if (!raw) return null;
         return normalizeConfig(JSON.parse(raw));
       } catch (_err) {
@@ -374,12 +581,43 @@
       }
     }
 
+    function readAppliedUrlCfg() {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          var v = localStorage.getItem(getAppliedUrlKey());
+          if (v) return v;
+        }
+      } catch (_e) {}
+      var wn = readWindowNameState();
+      return wn ? wn.appliedUrlCfg : '';
+    }
+
+    function writeAppliedUrlCfg(val) {
+      appliedUrlCfg = val || '';
+      try {
+        if (typeof localStorage !== 'undefined') {
+          if (appliedUrlCfg) localStorage.setItem(getAppliedUrlKey(), appliedUrlCfg);
+          else localStorage.removeItem(getAppliedUrlKey());
+        }
+      } catch (_e) {}
+    }
+
     function writeLocalStorage(cfg) {
       try {
         if (typeof localStorage !== 'undefined') {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+          localStorage.setItem(getStorageKey(), JSON.stringify(cfg));
         }
       } catch (_err) {}
+    }
+
+    function persistClientAll(cfg) {
+      writeLocalStorage(cfg);
+      writeWindowNameState(cfg, appliedUrlCfg);
+      idbWriteState(cfg, appliedUrlCfg);
+    }
+
+    function isHttpOrigin() {
+      return typeof location !== 'undefined' && /^https?:$/i.test(location.protocol);
     }
 
     function initChannels() {
@@ -389,8 +627,9 @@
           channel.onmessage = function (ev) {
             var data = ev && ev.data;
             if (!data || data.sender === clientId || !data.config) return;
+            if ((data.profile || 'default') !== activeProfileId) return;
             current = normalizeConfig(data.config);
-            writeLocalStorage(current);
+            persistClientAll(current);
             notify('broadcast');
           };
         } catch (_err) {
@@ -399,30 +638,108 @@
       }
       if (typeof window !== 'undefined' && window.addEventListener) {
         window.addEventListener('storage', function (ev) {
-          if (ev.key === STORAGE_KEY && ev.newValue) {
+          if (ev.key === getStorageKey() && ev.newValue) {
             try {
               current = normalizeConfig(JSON.parse(ev.newValue));
+              writeWindowNameState(current, appliedUrlCfg);
               notify('storage');
             } catch (_e) {}
           }
         });
+
+        var onUnloadFlush = function () {
+          flushServerSave();
+        };
+        window.addEventListener('pagehide', onUnloadFlush);
+        window.addEventListener('beforeunload', onUnloadFlush);
+        if (typeof document !== 'undefined' && document.addEventListener) {
+          document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') {
+              flushServerSave();
+            }
+          });
+        }
       }
     }
 
-    function saveToServerImmediate(cfg) {
-      if (!serverAvailable || typeof fetch !== 'function') return;
-      fetch('/api/mc-config', {
+    function saveToServerImmediate(cfg, useKeepalive) {
+      if (!isHttpOrigin() || typeof fetch !== 'function') {
+        return Promise.resolve({ ok: true, target: 'local', savedAt: Date.now() });
+      }
+      saveState.saving = true;
+      var bodyStr = JSON.stringify({ sender: clientId, profile: activeProfileId, config: cfg });
+      return fetch(getApiConfigUrl(), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sender: clientId, config: cfg })
-      }).catch(function () {});
+        body: bodyStr,
+        keepalive: Boolean(useKeepalive)
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        })
+        .then(function (payload) {
+          serverAvailable = true;
+          connectSse();
+          saveState.dirty = false;
+          saveState.saving = false;
+          saveState.lastError = false;
+          saveState.target = 'server';
+          saveState.lastSavedAt = (payload && payload.savedAt) || Date.now();
+          notify('save-state');
+          return { ok: true, target: 'server', savedAt: saveState.lastSavedAt };
+        })
+        .catch(function () {
+          saveState.saving = false;
+          saveState.lastError = true;
+          notify('save-state');
+          return { ok: true, target: 'local', serverError: true, savedAt: Date.now() };
+        });
+    }
+
+    function flushServerSave() {
+      if (!isHttpOrigin() || (!serverSaveTimer && !saveState.dirty)) return;
+      if (serverSaveTimer) {
+        clearTimeout(serverSaveTimer);
+        serverSaveTimer = null;
+      }
+      var bodyStr = JSON.stringify({ sender: clientId, profile: activeProfileId, config: current });
+      var url = getApiConfigUrl();
+      try {
+        if (typeof fetch === 'function') {
+          fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: bodyStr,
+            keepalive: true
+          }).catch(function () {});
+          saveState.dirty = false;
+          return;
+        }
+      } catch (_e) {}
+      if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function' && typeof Blob !== 'undefined') {
+        try {
+          navigator.sendBeacon(url, new Blob([bodyStr], { type: 'application/json' }));
+          saveState.dirty = false;
+        } catch (_e2) {}
+      }
     }
 
     function scheduleServerSave(cfg) {
+      if (!serverAvailable && !isHttpOrigin()) {
+        saveState.dirty = false;
+        saveState.saving = false;
+        saveState.target = 'local';
+        saveState.lastSavedAt = Date.now();
+        return;
+      }
       if (!serverAvailable) return;
+      saveState.dirty = true;
+      saveState.saving = true;
       if (serverSaveTimer) clearTimeout(serverSaveTimer);
       serverSaveTimer = setTimeout(function () {
-        saveToServerImmediate(cfg);
+        serverSaveTimer = null;
+        saveToServerImmediate(cfg, false);
       }, 120);
     }
 
@@ -434,8 +751,13 @@
           try {
             var payload = JSON.parse(ev.data);
             if (!payload || payload.sender === clientId || !payload.config) return;
+            if ((payload.profile || 'default') !== activeProfileId) return;
             current = normalizeConfig(payload.config);
-            writeLocalStorage(current);
+            persistClientAll(current);
+            saveState.dirty = false;
+            saveState.saving = false;
+            saveState.lastSavedAt = Date.now();
+            saveState.target = 'server';
             notify('server-sse');
           } catch (_e) {}
         });
@@ -444,15 +766,15 @@
       }
     }
 
-    function probeAndConnectServer() {
-      if (typeof location === 'undefined' || !/^https?:$/i.test(location.protocol)) {
+    function probeAndConnectServer(preferLocalSeed) {
+      if (!isHttpOrigin() || typeof fetch !== 'function') {
         return Promise.resolve(false);
       }
-      if (typeof fetch !== 'function') return Promise.resolve(false);
+      var targetProfile = activeProfileId;
       var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      var timeout = controller ? setTimeout(function () { controller.abort(); }, 900) : null;
+      var timeout = controller ? setTimeout(function () { controller.abort(); }, 3000) : null;
 
-      return fetch('/api/mc-config', {
+      return fetch(getApiConfigUrl(targetProfile), {
         method: 'GET',
         cache: 'no-store',
         signal: controller ? controller.signal : undefined
@@ -462,13 +784,17 @@
           if (!res.ok) return false;
           return res.json().then(function (payload) {
             if (!payload || !payload.ok) return false;
+            if (targetProfile !== activeProfileId) return true;
             serverAvailable = true;
-            if (payload.config) {
+            saveState.target = 'server';
+            if (payload.config && !dirtySinceInit && !preferLocalSeed) {
               current = normalizeConfig(payload.config);
-              writeLocalStorage(current);
+              persistClientAll(current);
+              saveState.dirty = false;
+              saveState.lastSavedAt = Date.now();
               notify('server-init');
             } else {
-              saveToServerImmediate(current);
+              saveToServerImmediate(current, false);
             }
             connectSse();
             return true;
@@ -480,43 +806,120 @@
         });
     }
 
-    function init(urlOverrides) {
-      initChannels();
-      var ov = urlOverrides || (typeof location !== 'undefined' ? extractUrlOverrides(location) : {});
-      var local = readLocalStorage();
-      current = ov.configFromUrl ? ov.configFromUrl : (local || getDefaultConfig());
+    function scheduleServerRetry(preferLocalSeed) {
+      if (opts.skipServerProbe || !isHttpOrigin() || serverAvailable || retryAttempt >= 3) return;
+      var delays = [2000, 5000, 10000];
+      var waitMs = delays[retryAttempt] || 10000;
+      retryAttempt += 1;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(function () {
+        retryTimer = null;
+        if (serverAvailable) return;
+        probeAndConnectServer(preferLocalSeed).then(function (ok) {
+          if (ok) notify('server-status');
+          else scheduleServerRetry(preferLocalSeed);
+        });
+      }, waitMs);
+    }
 
-      if (ov.themeOverride && BaseConfig.THEMES.indexOf(ov.themeOverride) !== -1) {
+    function loadCurrentProfileLocal(ov) {
+      var localLs = readLocalStorage();
+      var localWn = readWindowNameState();
+      var local = localLs || (localWn && localWn.cfg) || null;
+      appliedUrlCfg = readAppliedUrlCfg();
+      var hadPrevApplied = Boolean(appliedUrlCfg);
+
+      var hasNewUrlCfg = Boolean(
+        ov &&
+        ov.configFromUrl &&
+        ov.cfgRaw &&
+        (ov.forceCfg || !local || appliedUrlCfg !== ov.cfgRaw)
+      );
+
+      if (hasNewUrlCfg) {
+        current = ov.configFromUrl;
+        writeAppliedUrlCfg(ov.cfgRaw);
+      } else if (ov && ov.configFromUrl && !ov.cfgRaw) {
+        current = ov.configFromUrl;
+      } else if (local) {
+        current = local;
+      } else {
+        current = getDefaultConfig();
+      }
+
+      if (ov && ov.themeOverride && BaseConfig.THEMES.indexOf(ov.themeOverride) !== -1) {
         current.appearance.theme = ov.themeOverride;
       }
-      if (ov.animOverride && BaseConfig.ANIM_STYLES.indexOf(ov.animOverride) !== -1) {
+      if (ov && ov.animOverride && BaseConfig.ANIM_STYLES.indexOf(ov.animOverride) !== -1) {
         current.animation.style = ov.animOverride;
       }
-      if (ov.posOverride && BaseConfig.ANCHORS.indexOf(ov.posOverride) !== -1) {
+      if (ov && ov.posOverride && BaseConfig.ANCHORS.indexOf(ov.posOverride) !== -1) {
         current.position.anchor = ov.posOverride;
       }
-      if (ov.modeOverride && DISPLAY_MODES.indexOf(ov.modeOverride) !== -1) {
+      if (ov && ov.modeOverride && DISPLAY_MODES.indexOf(ov.modeOverride) !== -1) {
         current.playback.displayMode = ov.modeOverride;
       }
 
       current = normalizeConfig(current);
-      writeLocalStorage(current);
+      if (local || (ov && ov.forceCfg)) {
+        persistClientAll(current);
+      } else {
+        writeLocalStorage(current);
+        writeWindowNameState(current, appliedUrlCfg);
+      }
+      saveState.lastSavedAt = Date.now();
+      saveState.target = 'local';
+      return { local: local, ov: ov || {}, hasNewUrlCfg: hasNewUrlCfg, hadPrevApplied: hadPrevApplied };
+    }
+
+    function init(urlOverrides) {
+      initChannels();
+      var ov = urlOverrides || (typeof location !== 'undefined' ? extractUrlOverrides(location) : {});
+      if (ov.profile) {
+        activeProfileId = sanitizePid(ov.profile);
+        profileLockedByUrl = true;
+      } else if (!opts.profile) {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            var savedPid = localStorage.getItem(ACTIVE_PROFILE_KEY);
+            if (savedPid) activeProfileId = sanitizePid(savedPid);
+          }
+        } catch (_e) {}
+      }
+      if (activeProfileId !== 'default') {
+        ensureProfileInMeta(activeProfileId);
+      }
+
+      var loadRes = loadCurrentProfileLocal(ov);
       notify('init');
 
-      if (!opts.skipServerProbe && !ov.configFromUrl) {
-        probeAndConnectServer().then(function (connected) {
-          if (connected) notify('server-status');
-        });
-      } else if (!opts.skipServerProbe) {
-        if (typeof location !== 'undefined' && /^https?:$/i.test(location.protocol) && typeof fetch === 'function') {
-          fetch('/api/health').then(function (r) {
-            if (r.ok) {
-              serverAvailable = true;
-              connectSse();
-              notify('server-status');
+      if (!loadRes.local && !ov.forceCfg) {
+        var initPid = activeProfileId;
+        idbReadState().then(function (idbState) {
+          if (activeProfileId !== initPid || dirtySinceInit || serverAvailable) return;
+          if (idbState && idbState.cfg && (!ov.cfgRaw || !idbState.appliedUrlCfg || idbState.appliedUrlCfg === ov.cfgRaw)) {
+            current = normalizeConfig(idbState.cfg);
+            if (idbState.appliedUrlCfg) {
+              writeAppliedUrlCfg(idbState.appliedUrlCfg);
             }
-          }).catch(function () {});
-        }
+            writeLocalStorage(current);
+            writeWindowNameState(current, appliedUrlCfg);
+            notify('storage');
+          } else {
+            idbWriteState(current, appliedUrlCfg);
+          }
+        });
+      }
+
+      if (!opts.skipServerProbe) {
+        var preferSeed = Boolean(ov.forceCfg || (loadRes.hasNewUrlCfg && loadRes.hadPrevApplied));
+        probeAndConnectServer(preferSeed).then(function (connected) {
+          if (connected) {
+            notify('server-status');
+          } else {
+            scheduleServerRetry(preferSeed);
+          }
+        });
       }
 
       return clone(current);
@@ -526,13 +929,42 @@
       return clone(current);
     }
 
+    function pushUndoSnapshot(prevCfg, source) {
+      var now = Date.now();
+      var isContinuous = source === 'studio-input' && lastUndoSource === 'studio-input' && (now - lastUndoPushAt) < 650;
+      if (isContinuous && undoStack.length > 0) {
+        lastUndoPushAt = now;
+        return;
+      }
+      undoStack.push(clone(prevCfg));
+      if (undoStack.length > MAX_UNDO) {
+        undoStack.shift();
+      }
+      lastUndoPushAt = now;
+      lastUndoSource = source || 'local';
+    }
+
     function set(nextConfig, meta) {
       var source = (meta && meta.source) || 'local';
-      current = normalizeConfig(nextConfig);
-      writeLocalStorage(current);
+      var normalized = normalizeConfig(nextConfig);
+      var shouldRecordUndo =
+        source !== 'undo' &&
+        source !== 'server-init' &&
+        source !== 'server-sse' &&
+        source !== 'storage' &&
+        source !== 'broadcast' &&
+        source !== 'profile-switch';
+
+      if (shouldRecordUndo && JSON.stringify(current) !== JSON.stringify(normalized)) {
+        pushUndoSnapshot(current, source);
+      }
+
+      dirtySinceInit = true;
+      current = normalized;
+      persistClientAll(current);
       if (channel) {
         try {
-          channel.postMessage({ sender: clientId, config: current });
+          channel.postMessage({ sender: clientId, profile: activeProfileId, config: current });
         } catch (_e) {}
       }
       scheduleServerSave(current);
@@ -544,6 +976,175 @@
       var draft = clone(current);
       var res = mutator(draft);
       return set(res && typeof res === 'object' ? res : draft, meta);
+    }
+
+    function canUndo() {
+      return undoStack.length > 0;
+    }
+
+    function undo() {
+      if (!undoStack.length) return null;
+      var prev = undoStack.pop();
+      lastUndoSource = 'undo';
+      lastUndoPushAt = 0;
+      return set(prev, { source: 'undo' });
+    }
+
+    function saveNow() {
+      if (serverSaveTimer) {
+        clearTimeout(serverSaveTimer);
+        serverSaveTimer = null;
+      }
+      persistClientAll(current);
+      if (channel) {
+        try {
+          channel.postMessage({ sender: clientId, profile: activeProfileId, config: current });
+        } catch (_e) {}
+      }
+      if (isHttpOrigin()) {
+        return saveToServerImmediate(current, true);
+      }
+      saveState.dirty = false;
+      saveState.saving = false;
+      saveState.target = 'local';
+      saveState.lastSavedAt = Date.now();
+      notify('save-state');
+      return Promise.resolve({ ok: true, target: 'local', savedAt: saveState.lastSavedAt });
+    }
+
+    function getSaveState() {
+      return Object.assign({}, saveState, {
+        serverAvailable: serverAvailable,
+        canUndo: undoStack.length > 0,
+        profile: activeProfileId
+      });
+    }
+
+    function getActiveProfile() {
+      var list = readProfilesMeta();
+      var found = list.find(function (p) { return p.id === activeProfileId; });
+      return {
+        id: activeProfileId,
+        name: found ? found.name : activeProfileId,
+        lockedByUrl: profileLockedByUrl
+      };
+    }
+
+    function listProfiles() {
+      var localList = readProfilesMeta();
+      if (!isHttpOrigin() || typeof fetch !== 'function') {
+        return Promise.resolve(localList);
+      }
+      return fetch('/api/mc-profiles', { method: 'GET', cache: 'no-store' })
+        .then(function (res) {
+          if (!res.ok) return localList;
+          return res.json().then(function (payload) {
+            if (!payload || !payload.ok || !Array.isArray(payload.profiles)) return localList;
+            var merged = [{ id: 'default', name: 'default', updatedAt: 0 }];
+            var seen = { default: true };
+            payload.profiles.concat(localList).forEach(function (entry) {
+              if (!entry || !entry.id) return;
+              var pid = sanitizePid(entry.id);
+              if (seen[pid]) return;
+              seen[pid] = true;
+              merged.push({
+                id: pid,
+                name: String(entry.name || pid).slice(0, 48),
+                updatedAt: Number(entry.updatedAt) || 0
+              });
+            });
+            writeProfilesMeta(merged);
+            return merged;
+          });
+        })
+        .catch(function () {
+          return localList;
+        });
+    }
+
+    function switchProfile(nextId, switchOpts) {
+      var swOpts = switchOpts || {};
+      flushServerSave();
+      var pid = sanitizePid(nextId || 'default');
+      activeProfileId = pid;
+      if (!profileLockedByUrl && swOpts.persistSelection !== false) {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(ACTIVE_PROFILE_KEY, pid);
+          }
+        } catch (_e) {}
+      }
+      if (pid !== 'default') {
+        ensureProfileInMeta(pid, swOpts.name);
+      }
+      undoStack = [];
+      lastUndoSource = '';
+      lastUndoPushAt = 0;
+      dirtySinceInit = false;
+
+      if (swOpts.seedConfig) {
+        current = normalizeConfig(swOpts.seedConfig);
+        persistClientAll(current);
+      } else {
+        loadCurrentProfileLocal(null);
+      }
+
+      notify('profile-switch');
+
+      if (!opts.skipServerProbe && isHttpOrigin() && typeof fetch === 'function') {
+        if (swOpts.seedConfig) {
+          return saveToServerImmediate(current, false).then(function () {
+            return clone(current);
+          });
+        }
+        return probeAndConnectServer(false).then(function () {
+          return clone(current);
+        });
+      }
+      return Promise.resolve(clone(current));
+    }
+
+    function createProfile(rawName, copyCurrent) {
+      var displayName = String(rawName || '').trim().slice(0, 48);
+      var pid = slugifyName(displayName);
+      if (pid === 'default') pid = 'scene-' + Math.random().toString(36).slice(2, 6);
+      var existing = readProfilesMeta();
+      if (existing.some(function (p) { return p.id === pid; })) {
+        pid = (pid + '-' + Math.random().toString(36).slice(2, 5)).slice(0, 48);
+      }
+      ensureProfileInMeta(pid, displayName || pid);
+      var seed = copyCurrent === false ? getDefaultConfig() : clone(current);
+      if (isHttpOrigin() && typeof fetch === 'function') {
+        fetch('/api/mc-profiles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: pid, name: displayName || pid, config: seed })
+        }).catch(function () {});
+      }
+      return switchProfile(pid, { name: displayName || pid, seedConfig: seed }).then(function () {
+        return { id: pid, name: displayName || pid };
+      });
+    }
+
+    function deleteProfile(targetId) {
+      var pid = sanitizePid(targetId);
+      if (pid === 'default') return Promise.resolve(false);
+      var meta = readProfilesMeta().filter(function (p) { return p.id !== pid; });
+      writeProfilesMeta(meta);
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(getStorageKey(pid));
+          localStorage.removeItem(getAppliedUrlKey(pid));
+        }
+      } catch (_e) {}
+      if (isHttpOrigin() && typeof fetch === 'function') {
+        fetch('/api/mc-profiles/' + encodeURIComponent(pid), { method: 'DELETE' }).catch(function () {});
+      }
+      if (activeProfileId === pid) {
+        return switchProfile('default').then(function () { return true; });
+      }
+      notify('profile-switch');
+      return Promise.resolve(true);
     }
 
     function subscribe(fn) {
@@ -558,6 +1159,7 @@
     }
 
     function destroy() {
+      flushServerSave();
       if (channel) {
         try { channel.close(); } catch (_e) {}
         channel = null;
@@ -570,6 +1172,10 @@
         clearTimeout(serverSaveTimer);
         serverSaveTimer = null;
       }
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
     }
 
     return {
@@ -577,6 +1183,15 @@
       get: get,
       set: set,
       update: update,
+      canUndo: canUndo,
+      undo: undo,
+      saveNow: saveNow,
+      getSaveState: getSaveState,
+      getActiveProfile: getActiveProfile,
+      listProfiles: listProfiles,
+      switchProfile: switchProfile,
+      createProfile: createProfile,
+      deleteProfile: deleteProfile,
       subscribe: subscribe,
       isServerAvailable: isServerAvailable,
       destroy: destroy
@@ -610,6 +1225,8 @@
     decodeConfigFromParam: decodeConfigFromParam,
     buildShareUrl: buildShareUrl,
     extractUrlOverrides: extractUrlOverrides,
+    sanitizeProfileId: BaseConfig.sanitizeProfileId,
+    slugifyProfileName: BaseConfig.slugifyProfileName,
     createMcConfigStore: createMcConfigStore
   };
 });

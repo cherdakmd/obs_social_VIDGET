@@ -210,3 +210,30 @@ test('all 16 style presets, 14 themes, and 10 layouts normalize and apply cleanl
   assert.equal(minimal.typography.textStrokePx, 0);
 });
 
+test('widened 1080p position offsets, /uploads/ safe image URLs, and profile helpers work cleanly', () => {
+  const norm = Config.normalizeConfig({
+    position: { anchor: 'bottom-right', offsetX: 1520, offsetY: 910 },
+    items: [
+      { id: 'up1', platform: 'telegram', title: 'TG', handle: '@tg', iconType: 'image', iconImage: '/uploads/logo-123.png' },
+      { id: 'up2', platform: 'twitch', title: 'TW', handle: 'tw', iconType: 'image', iconImage: '/uploads/../config.json' }
+    ]
+  });
+  assert.equal(norm.position.offsetX, 1520);
+  assert.equal(norm.position.offsetY, 910);
+  assert.equal(norm.items[0].iconImage, '/uploads/logo-123.png');
+  assert.equal(norm.items[1].iconImage, '');
+
+  const clamped = Config.normalizeConfig({ position: { offsetX: 5000, offsetY: -40 } });
+  assert.equal(clamped.position.offsetX, 1600);
+  assert.equal(clamped.position.offsetY, 0);
+
+  assert.equal(Icons.isSafeImageSrc('/uploads/avatar_1.webp'), true);
+  assert.equal(Icons.isSafeImageSrc('/uploads/bad/nested.png'), false);
+
+  assert.equal(Config.slugifyProfileName('Стрим Основной #1'), 'strim-osnovnoy-1');
+  assert.equal(Config.sanitizeProfileId('../Bad Profile!'), 'bad-profile');
+  const ov = Config.extractUrlOverrides(new URL('http://127.0.0.1:3847/index.html?profile=Scene%20Two'));
+  assert.equal(ov.profile, 'scene-two');
+});
+
+
