@@ -1192,6 +1192,7 @@
     var s = src.trim();
     if (!s) return false;
     if (/^https?:\/\//i.test(s)) return true;
+    if (/^\/uploads\/[a-zA-Z0-9._-]+\.(?:png|jpe?g|gif|webp|svg)$/i.test(s) && s.indexOf('..') === -1) return true;
     if (/^data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);base64,[a-z0-9+/=]+$/i.test(s)) return true;
     return false;
   }

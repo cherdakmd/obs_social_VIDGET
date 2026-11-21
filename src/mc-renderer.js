@@ -42,12 +42,17 @@
     return Boolean(sv.url && sv.url.trim() && (ap.showQrGlobal || sv.showQr));
   }
 
-  function formatIpLine(config) {
+  function formatIpParts(config) {
     var sv = (config && config.server) || {};
     var ap = (config && config.appearance) || {};
     var ip = (sv.ip || '').trim() || 'play.myserver.ru';
-    var prefix = ap.showIpPrefix && sv.ipPrefix && sv.ipPrefix.trim() ? sv.ipPrefix.trim() + ' ' : '';
-    return prefix + ip;
+    var prefix = ap.showIpPrefix && sv.ipPrefix && sv.ipPrefix.trim() ? sv.ipPrefix.trim() : '';
+    return { prefix: prefix, ip: ip };
+  }
+
+  function formatIpLine(config) {
+    var parts = formatIpParts(config);
+    return (parts.prefix ? parts.prefix + ' ' : '') + parts.ip;
   }
 
   function resolveVersionText(config, statusState) {
@@ -128,12 +133,14 @@
     var showDesc = Boolean(ap.showDescription && sv.description && sv.description.trim() && !compactLine);
     var showQr = shouldShowQr(config);
     var liveIcon = getEffectiveLiveIcon(config, statusState);
+    var ipParts = formatIpParts(config);
 
     return [
       ap.layout || 'card',
       pb.displayMode || 'always',
       showName ? '1' : '0',
       showVer ? '1' : '0',
+      ipParts.prefix ? 'pfx1' : 'pfx0',
       statusData.visible ? 'st1' : 'st0',
       showDesc ? '1' : '0',
       showQr ? ('qr:' + sv.url) : '0',
@@ -169,6 +176,7 @@
     var showTitleRow = showName || showVer || statusData.visible;
     var showDesc = Boolean(ap.showDescription && sv.description && sv.description.trim() && !compactLine);
     var showQr = shouldShowQr(config);
+    var ipParts = formatIpParts(config);
 
     var qrMarkup = '';
     if (showQr && QR && typeof QR.renderSvg === 'function') {
@@ -210,7 +218,10 @@
                   buildStatusBadgeHtml(statusData) +
                 '</div>'
               : '') +
-            '<div class="card-handle mc-ip-line">' + escapeHtml(formatIpLine(config)) + '</div>' +
+            '<div class="card-handle mc-ip-line mc-ip-row">' +
+              (ipParts.prefix ? '<span class="mc-ip-prefix">' + escapeHtml(ipParts.prefix) + '</span>' : '') +
+              '<span class="mc-ip-text">' + escapeHtml(ipParts.ip) + '</span>' +
+            '</div>' +
             (showDesc ? '<div class="card-subtitle mc-desc-line">' + escapeHtml(sv.description) + '</div>' : '') +
           '</div>' +
           (qrMarkup ? '<div class="card-qr-wrap">' + qrMarkup + '</div>' : '') +
@@ -242,8 +253,16 @@
       if (txtEl) txtEl.textContent = statusData.text;
     }
 
-    var handleEl = cardEl.querySelector('.mc-ip-line');
-    if (handleEl) handleEl.textContent = formatIpLine(config);
+    var ipParts = formatIpParts(config);
+    var prefixEl = cardEl.querySelector('.mc-ip-prefix');
+    var ipTextEl = cardEl.querySelector('.mc-ip-text');
+    if (prefixEl) prefixEl.textContent = ipParts.prefix;
+    if (ipTextEl) {
+      ipTextEl.textContent = ipParts.ip;
+    } else {
+      var handleEl = cardEl.querySelector('.mc-ip-line');
+      if (handleEl) handleEl.textContent = formatIpLine(config);
+    }
 
     var descEl = cardEl.querySelector('.mc-desc-line');
     if (descEl) descEl.textContent = sv.description || '';
@@ -252,6 +271,7 @@
   return {
     applyStagePosition: BaseRenderer.applyStagePosition,
     shouldShowQr: shouldShowQr,
+    formatIpParts: formatIpParts,
     formatIpLine: formatIpLine,
     resolveVersionText: resolveVersionText,
     buildStatusBadgeData: buildStatusBadgeData,

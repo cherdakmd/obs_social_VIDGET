@@ -75,6 +75,8 @@
       resetAllMcBtn: 'Сбросить всё (включая сервер)',
       copyObsMcUrlBtn: 'Скопировать URL виджета',
       copyDockMcUrlBtn: 'Скопировать URL Док-панели',
+      savedServerToast: '✓ Сохранено на диск (mc-config.json) и в браузер!',
+      saveStatusServer: 'Сервер подключён: автосохранение в mc-config.json активно — настройки сохранятся даже после обновления источника и перезапуска OBS.',
       obsGuideStep1McBody: 'Добавьте minecraft.html в OBS как «Браузер» (Локальный файл, 1920×1080). Нажмите ПКМ → «Взаимодействовать» и наведите мышь (или нажмите S / двойной клик) — откроются настройки сервера.',
       obsGuideStep2McBody: 'Откройте Док-панели → Пользовательские док-панели браузера и укажите minecraft-dock.html (или minecraft.html?dock=1) для управления сервером прямо из интерфейса OBS.',
       obsGuideStep3McBody: 'При запуске start-obs-widget.bat / ./start-obs-widget.sh откройте http://127.0.0.1:3847/minecraft.html и http://127.0.0.1:3847/minecraft-dock.html — настройки сохраняются в mc-config.json, а локальные серверы Minecraft (127.0.0.1, LAN, Radmin) пингуются напрямую по TCP/UDP!'
@@ -146,6 +148,8 @@
       resetAllMcBtn: 'Reset Everything (incl. Server)',
       copyObsMcUrlBtn: 'Copy Widget URL',
       copyDockMcUrlBtn: 'Copy Dock URL',
+      savedServerToast: '✓ Saved to disk (mc-config.json) and browser!',
+      saveStatusServer: 'Sync server connected: auto-saving to mc-config.json is active — settings persist across OBS source refreshes and restarts.',
       obsGuideStep1McBody: 'Add minecraft.html in OBS as a Local File Browser Source (1920×1080). Right-click → Interact and move your mouse (or press S / double-click) to configure your server overlay.',
       obsGuideStep2McBody: 'Open Docks → Custom Browser Docks in OBS and point it to minecraft-dock.html (or minecraft.html?dock=1) to manage your server overlay right from OBS.',
       obsGuideStep3McBody: 'When running start-obs-widget.bat / ./start-obs-widget.sh, open http://127.0.0.1:3847/minecraft.html and http://127.0.0.1:3847/minecraft-dock.html — config saves to mc-config.json and local/LAN Minecraft servers ping directly over TCP/UDP!'

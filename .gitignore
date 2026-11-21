@@ -1,8 +1,14 @@
 node_modules/
 config.json
 config.json.tmp
+config.backup.json
 mc-config.json
 mc-config.json.tmp
+mc-config.backup.json
+*.backup.json
+profiles/
+mc-profiles/
+uploads/
 .DS_Store
 Thumbs.db
 *.log

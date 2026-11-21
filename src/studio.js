@@ -46,6 +46,8 @@
     var activePresetId = '';
     var toastTimer = null;
     var dragSrcId = null;
+    var cachedProfiles = [];
+    var cachedServerInfo = null;
 
     function t(key) {
       var cfg = store.get();
@@ -60,6 +62,87 @@
       toastTimer = setTimeout(function () {
         toastEl.classList.remove('show');
       }, 2400);
+    }
+
+    function updateSaveIndicator() {
+      var st = typeof store.getSaveState === 'function' ? store.getSaveState() : { dirty: false, saving: false, canUndo: false };
+      var btn = rootEl.querySelector('[data-action="save-now"]');
+      if (btn) {
+        btn.classList.toggle('primary', Boolean(st.dirty));
+        btn.classList.toggle('success', !st.dirty);
+        btn.textContent = st.saving ? t('savingBtn') : st.dirty ? t('saveBtn') : t('savedBtn');
+      }
+      var panelBtn = rootEl.querySelector('[data-action="save-now-panel"]');
+      if (panelBtn) {
+        panelBtn.textContent = st.saving ? t('savingBtn') : t('saveNowBtn');
+      }
+      var undoBtn = rootEl.querySelector('[data-action="undo"]');
+      if (undoBtn) {
+        var hasUndo = typeof store.canUndo === 'function' ? store.canUndo() : Boolean(st.canUndo);
+        undoBtn.disabled = !hasUndo;
+      }
+    }
+
+    function saveNowWithFeedback() {
+      if (typeof store.saveNow !== 'function') return Promise.resolve();
+      var btn = rootEl.querySelector('[data-action="save-now"]');
+      if (btn) btn.textContent = t('savingBtn');
+      return store.saveNow().then(function (res) {
+        updateSaveIndicator();
+        showToast(res && res.target === 'server' ? t('savedServerToast') : t('savedLocalToast'));
+      });
+    }
+
+    function undoWithFeedback() {
+      if (typeof store.undo !== 'function' || (typeof store.canUndo === 'function' && !store.canUndo())) {
+        return false;
+      }
+      var prev = store.undo();
+      if (!prev) return false;
+      renderShell();
+      playback.refreshCurrentCard();
+      showToast(t('undoToast'));
+      return true;
+    }
+
+    function syncPositionInputs(pos) {
+      if (!pos) return;
+      rootEl.querySelectorAll('[data-anchor]').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-anchor') === pos.anchor);
+      });
+      var xInput = rootEl.querySelector('[data-pos="offsetX"]');
+      if (xInput) xInput.value = String(pos.offsetX);
+      var xVal = rootEl.querySelector('[data-val-for="pos:offsetX"]');
+      if (xVal) xVal.textContent = pos.offsetX + 'px';
+
+      var yInput = rootEl.querySelector('[data-pos="offsetY"]');
+      if (yInput) yInput.value = String(pos.offsetY);
+      var yVal = rootEl.querySelector('[data-val-for="pos:offsetY"]');
+      if (yVal) yVal.textContent = pos.offsetY + 'px';
+    }
+
+    function uploadImageToServerIfAvailable(fileName, dataUrl) {
+      if (!store.isServerAvailable() || typeof fetch !== 'function') {
+        return Promise.resolve({ uploaded: false, url: dataUrl });
+      }
+      return fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: fileName, dataUrl: dataUrl })
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        })
+        .then(function (payload) {
+          if (payload && payload.ok && payload.url) {
+            return { uploaded: true, url: payload.url };
+          }
+          return { uploaded: false, url: dataUrl };
+        })
+        .catch(function () {
+          return { uploaded: false, url: dataUrl };
+        });
     }
 
     function ensureSelectedItem(cfg) {
@@ -129,16 +212,23 @@
       var reader = new FileReader();
       reader.onload = function () {
         var rawDataUrl = String(reader.result || '');
-        if ((type === 'image/gif' || name.endsWith('.gif')) && rawDataUrl.length < 350000) {
+        var applyImageUrl = function (finalUrl, wasServerUploaded) {
           store.update(function (draft) {
             var target = draft.items.find(function (x) { return x.id === itemId; });
             if (target) {
               target.iconType = 'image';
-              target.iconImage = rawDataUrl;
+              target.iconImage = finalUrl;
             }
           });
-          showToast(t('iconUploadSuccess'));
+          showToast(wasServerUploaded ? t('uploadSavedServerToast') : t('iconUploadSuccess'));
           renderBody();
+        };
+
+        var isGif = type === 'image/gif' || name.endsWith('.gif');
+        if (isGif && (store.isServerAvailable() ? rawDataUrl.length < 6200000 : rawDataUrl.length < 350000)) {
+          uploadImageToServerIfAvailable(file.name, rawDataUrl).then(function (up) {
+            applyImageUrl(up.url, up.uploaded);
+          });
           return;
         }
 
@@ -157,15 +247,9 @@
           ctx.clearRect(0, 0, cw, ch);
           ctx.drawImage(img, 0, 0, cw, ch);
           var outUrl = canvas.toDataURL('image/png');
-          store.update(function (draft) {
-            var target = draft.items.find(function (x) { return x.id === itemId; });
-            if (target) {
-              target.iconType = 'image';
-              target.iconImage = outUrl;
-            }
+          uploadImageToServerIfAvailable(file.name, outUrl).then(function (up) {
+            applyImageUrl(up.url, up.uploaded);
           });
-          showToast(t('iconUploadSuccess'));
-          renderBody();
         };
         img.onerror = function () {
           showToast(t('iconUploadError'));
@@ -231,6 +315,10 @@
             : t('statusLocalMode');
 
       var langOther = cfg.lang === 'ru' ? 'EN' : 'RU';
+      var st = typeof store.getSaveState === 'function' ? store.getSaveState() : { dirty: false, saving: false, canUndo: false };
+      var saveBtnClass = st.dirty ? 'primary' : 'success';
+      var saveBtnLabel = st.saving ? t('savingBtn') : st.dirty ? t('saveBtn') : t('savedBtn');
+      var canUndoNow = typeof store.canUndo === 'function' ? store.canUndo() : Boolean(st.canUndo);
 
       rootEl.innerHTML =
         '<div class="studio-header">' +
@@ -242,6 +330,8 @@
             '</div>' +
           '</div>' +
           '<div class="studio-header-actions">' +
+            '<button class="btn sm" data-action="undo" title="' + escapeHtml(t('undoBtn')) + '"' + (canUndoNow ? '' : ' disabled') + '>↶</button>' +
+            '<button class="btn sm save-btn ' + saveBtnClass + '" data-action="save-now">' + escapeHtml(saveBtnLabel) + '</button>' +
             '<button class="btn sm danger ' + (resetConfirmOpen ? 'active' : '') + '" data-action="open-reset" title="' + escapeHtml(t('resetDefaultsBtn')) + '">↺ ' + escapeHtml(t('resetQuickBtn')) + '</button>' +
             '<button class="btn sm" data-action="toggle-lang" title="RU / EN">' + langOther + '</button>' +
             (!isDockMode
@@ -335,6 +425,12 @@
 
       var closeBtn = rootEl.querySelector('[data-action="close-studio"]');
       if (closeBtn) closeBtn.addEventListener('click', onClose);
+
+      var saveNowBtn = rootEl.querySelector('[data-action="save-now"]');
+      if (saveNowBtn) saveNowBtn.addEventListener('click', saveNowWithFeedback);
+
+      var undoBtn = rootEl.querySelector('[data-action="undo"]');
+      if (undoBtn) undoBtn.addEventListener('click', undoWithFeedback);
 
       var openResetBtn = rootEl.querySelector('[data-action="open-reset"]');
       if (openResetBtn) {
@@ -484,6 +580,8 @@
       if (selected) {
         var iconPlatforms = Icons.searchPlatforms(iconSearchQuery, iconCategory);
         var pickerHtml = buildIconPickerHtml(iconPlatforms, selected);
+        var selectedQrActive = selected.showQr === 'on' || (selected.showQr !== 'off' && cfg.appearance.showQrGlobal);
+        var showQrLenWarn = Boolean(selectedQrActive && selected.url && selected.url.trim().length > 100);
 
         editorHtml =
           '<div class="section-box" data-editor-id="' + escapeHtml(selected.id) + '">' +
@@ -514,6 +612,7 @@
             '<div class="field-group">' +
               '<span class="field-label">' + escapeHtml(t('fieldUrl')) + '</span>' +
               '<input class="input" type="url" data-edit="url" value="' + escapeHtml(selected.url) + '" placeholder="' + escapeHtml(t('fieldUrlPlaceholder')) + '">' +
+              '<div class="qr-len-warn" data-qr-warn style="display:' + (showQrLenWarn ? 'block' : 'none') + ';">⚠ ' + escapeHtml(t('qrLengthWarn')) + '</div>' +
             '</div>' +
 
             '<div class="row-2">' +
@@ -846,6 +945,16 @@
             mutateItem(function (it) { it.iconSvg = Icons.sanitizeSvg(el.value); }, true);
           } else {
             mutateItem(function (it) { it[field] = el.value; }, true);
+          }
+
+          if (field === 'url' || field === 'showQr') {
+            var qrWarnEl = editorBox.querySelector('[data-qr-warn]');
+            if (qrWarnEl) {
+              var curCfg = store.get();
+              var curIt = curCfg.items.find(function (x) { return x.id === itemId; });
+              var qrActive = curIt && (curIt.showQr === 'on' || (curIt.showQr !== 'off' && curCfg.appearance.showQrGlobal));
+              qrWarnEl.style.display = (qrActive && curIt.url && curIt.url.trim().length > 100) ? 'block' : 'none';
+            }
           }
         });
       });
@@ -1354,6 +1463,140 @@
       bindSectionResetButtons(bodyEl);
     }
 
+    function renderProfilesListMarkup() {
+      var activeProf = typeof store.getActiveProfile === 'function'
+        ? store.getActiveProfile()
+        : { id: 'default', name: 'default', lockedByUrl: false };
+      var profiles = cachedProfiles && cachedProfiles.length
+        ? cachedProfiles
+        : [{ id: 'default', name: 'default', updatedAt: 0 }];
+
+      return (
+        (activeProf.lockedByUrl
+          ? '<div class="save-file-warn" style="margin-bottom:4px;">' + escapeHtml(t('profileLockedWarn')) + '</div>'
+          : '') +
+        '<div class="profile-list">' +
+          profiles.map(function (p) {
+            var isCur = p.id === activeProf.id;
+            var label = p.id === 'default' ? t('profileDefaultName') : (p.name || p.id);
+            return (
+              '<div class="profile-row ' + (isCur ? 'active' : '') + '">' +
+                '<button class="profile-name-btn" data-switch-profile="' + escapeHtml(p.id) + '" title="' + escapeHtml(p.id) + '"' + (activeProf.lockedByUrl ? ' disabled' : '') + '>' + escapeHtml(label) + '</button>' +
+                (isCur ? '<span class="profile-badge">✓</span>' : '') +
+                '<button class="btn sm" data-copy-profile-url="' + escapeHtml(p.id) + '" title="' + escapeHtml(t('profileCopyUrlBtn')) + '">🔗</button>' +
+                (p.id !== 'default' && !activeProf.lockedByUrl
+                  ? '<button class="btn sm danger" data-delete-profile="' + escapeHtml(p.id) + '" title="✕">🗑</button>'
+                  : '') +
+              '</div>'
+            );
+          }).join('') +
+        '</div>' +
+        (!activeProf.lockedByUrl
+          ? '<div class="profile-create-row">' +
+              '<input class="input" type="text" data-profile-name-input placeholder="' + escapeHtml(t('profileNewPlaceholder')) + '" maxlength="40">' +
+              '<button class="btn sm primary" data-action="create-profile">' + escapeHtml(t('profileCreateBtn')) + '</button>' +
+            '</div>'
+          : '')
+      );
+    }
+
+    function bindProfilesEvents(container) {
+      var baseUrl = location.href.split('#')[0].split('?')[0].replace(/dock\.html$/i, 'index.html');
+      container.querySelectorAll('[data-switch-profile]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var pid = btn.getAttribute('data-switch-profile');
+          if (typeof store.switchProfile !== 'function') return;
+          store.switchProfile(pid).then(function () {
+            renderShell();
+            playback.replay();
+            showToast(t('profileSwitchedToast'));
+          });
+        });
+      });
+
+      container.querySelectorAll('[data-copy-profile-url]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var pid = btn.getAttribute('data-copy-profile-url');
+          var url = pid === 'default' ? baseUrl : (baseUrl + '?profile=' + encodeURIComponent(pid));
+          copyText(url, false);
+        });
+      });
+
+      container.querySelectorAll('[data-delete-profile]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var pid = btn.getAttribute('data-delete-profile');
+          if (typeof store.deleteProfile !== 'function') return;
+          store.deleteProfile(pid).then(function () {
+            if (typeof store.listProfiles === 'function') {
+              store.listProfiles().then(function (list) {
+                cachedProfiles = list || [];
+                var box = rootEl.querySelector('#obs-profiles-box');
+                if (box) {
+                  box.innerHTML = renderProfilesListMarkup();
+                  bindProfilesEvents(box);
+                }
+              });
+            }
+            renderShell();
+            playback.replay();
+            showToast(t('profileDeletedToast'));
+          });
+        });
+      });
+
+      var createBtn = container.querySelector('[data-action="create-profile"]');
+      var nameInput = container.querySelector('[data-profile-name-input]');
+      var handleCreate = function () {
+        if (!nameInput || typeof store.createProfile !== 'function') return;
+        var val = nameInput.value.trim();
+        if (!val) {
+          nameInput.focus();
+          return;
+        }
+        store.createProfile(val, true).then(function () {
+          if (typeof store.listProfiles === 'function') {
+            store.listProfiles().then(function (list) {
+              cachedProfiles = list || [];
+              renderShell();
+              showToast(t('profileCreatedToast'));
+            });
+          } else {
+            renderShell();
+            showToast(t('profileCreatedToast'));
+          }
+        });
+      };
+      if (createBtn) createBtn.addEventListener('click', handleCreate);
+      if (nameInput) {
+        nameInput.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            handleCreate();
+          }
+        });
+      }
+    }
+
+    function renderServerPathMarkup() {
+      if (!store.isServerAvailable() || !cachedServerInfo || !cachedServerInfo.dataDir) return '';
+      return (
+        '<div class="server-path-box">' +
+          '<span style="flex-shrink:0;">' + escapeHtml(t('serverDataDirLabel')) + '</span>' +
+          '<span class="server-path-code" title="' + escapeHtml(cachedServerInfo.dataDir) + '">' + escapeHtml(cachedServerInfo.dataDir) + '</span>' +
+          '<button class="btn sm" data-action="copy-data-dir" style="padding:2px 6px;font-size:10.5px;">' + escapeHtml(t('copyPathBtn')) + '</button>' +
+        '</div>'
+      );
+    }
+
+    function bindServerPathEvent(container) {
+      var btn = container.querySelector('[data-action="copy-data-dir"]');
+      if (btn && cachedServerInfo && cachedServerInfo.dataDir) {
+        btn.addEventListener('click', function () {
+          copyText(cachedServerInfo.dataDir, false);
+        });
+      }
+    }
+
     function renderObsTab(bodyEl, cfg) {
       var pos = cfg.position;
       var pb = cfg.playback;
@@ -1372,8 +1615,16 @@
               return '<button class="anchor-cell ' + (pos.anchor === anc ? 'active' : '') + '" data-anchor="' + anc + '" title="' + anc + '">' + anchorArrows[anc] + '</button>';
             }).join('') +
           '</div>' +
-          renderRange('offsetX', t('offsetXLabel'), pos.offsetX, 0, 300, 2, 'px', 'pos') +
-          renderRange('offsetY', t('offsetYLabel'), pos.offsetY, 0, 300, 2, 'px', 'pos') +
+          renderRange('offsetX', t('offsetXLabel'), pos.offsetX, 0, 1600, 2, 'px', 'pos') +
+          renderRange('offsetY', t('offsetYLabel'), pos.offsetY, 0, 950, 2, 'px', 'pos') +
+          (!isDockMode
+            ? '<div class="drag-hint-note">✋ ' + escapeHtml(t('dragCanvasHint')) + '</div>'
+            : '') +
+        '</div>' +
+
+        '<div class="section-box">' +
+          '<div class="section-title">' + escapeHtml(t('profilesTitle')) + '</div>' +
+          '<div id="obs-profiles-box">' + renderProfilesListMarkup() + '</div>' +
         '</div>' +
 
         '<div class="section-box">' +
@@ -1385,6 +1636,14 @@
 
         '<div class="section-box">' +
           '<div class="section-title">' + escapeHtml(t('exportTitle')) + '</div>' +
+          '<div class="save-status-box ' + (store.isServerAvailable() ? 'is-server' : 'is-local') + '">' +
+            '<div>' + escapeHtml(store.isServerAvailable() ? t('saveStatusServer') : t('saveStatusLocal')) + '</div>' +
+            (!store.isServerAvailable()
+              ? '<div class="save-file-warn">' + escapeHtml(t('saveFileWarn')) + '</div>'
+              : '') +
+          '</div>' +
+          '<div id="obs-server-path-slot">' + renderServerPathMarkup() + '</div>' +
+          '<button class="btn success" data-action="save-now-panel">' + escapeHtml(t('saveNowBtn')) + '</button>' +
           '<div class="row-2">' +
             '<button class="btn primary" data-action="copy-url">🔗 ' + escapeHtml(t('copyObsUrlBtn')) + '</button>' +
             '<button class="btn" data-action="copy-dock-url">🧩 ' + escapeHtml(t('copyDockUrlBtn')) + '</button>' +
@@ -1417,12 +1676,53 @@
       bindSectionInputs(bodyEl, 'pb', 'playback', false);
       bindSectionInputs(bodyEl, 'obs', 'obs', false);
 
+      var profBox = bodyEl.querySelector('#obs-profiles-box');
+      if (profBox) {
+        bindProfilesEvents(profBox);
+        if (typeof store.listProfiles === 'function') {
+          store.listProfiles().then(function (list) {
+            cachedProfiles = list || [];
+            var liveBox = bodyEl.querySelector('#obs-profiles-box');
+            if (liveBox && activeTab === 'obs') {
+              liveBox.innerHTML = renderProfilesListMarkup();
+              bindProfilesEvents(liveBox);
+            }
+          });
+        }
+      }
+
+      var pathSlot = bodyEl.querySelector('#obs-server-path-slot');
+      if (pathSlot) {
+        bindServerPathEvent(pathSlot);
+        if (store.isServerAvailable() && !cachedServerInfo && typeof fetch === 'function') {
+          fetch('/api/info', { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (info) {
+              if (!info || !info.ok) return;
+              cachedServerInfo = info;
+              var liveSlot = bodyEl.querySelector('#obs-server-path-slot');
+              if (liveSlot && activeTab === 'obs') {
+                liveSlot.innerHTML = renderServerPathMarkup();
+                bindServerPathEvent(liveSlot);
+              }
+            })
+            .catch(function () {});
+        }
+      }
+
+      var savePanelBtn = bodyEl.querySelector('[data-action="save-now-panel"]');
+      if (savePanelBtn) {
+        savePanelBtn.addEventListener('click', saveNowWithFeedback);
+      }
+
       var copyUrlBtn = bodyEl.querySelector('[data-action="copy-url"]');
       if (copyUrlBtn) {
         copyUrlBtn.addEventListener('click', function () {
           var cur = store.get();
           var base = location.href.split('#')[0].split('?')[0].replace(/dock\.html$/i, 'index.html');
-          var share = Config.buildShareUrl(base, cur, null);
+          var activeProf = typeof store.getActiveProfile === 'function' ? store.getActiveProfile() : { id: 'default' };
+          var extra = activeProf.id && activeProf.id !== 'default' ? { profile: activeProf.id } : null;
+          var share = Config.buildShareUrl(base, cur, extra);
           copyText(share, share.length > 6000);
         });
       }
@@ -1431,7 +1731,11 @@
       if (copyDockBtn) {
         copyDockBtn.addEventListener('click', function () {
           var base = location.href.split('#')[0].split('?')[0].replace(/dock\.html$/i, 'index.html');
-          copyText(base + '?dock=1', false);
+          var activeProf = typeof store.getActiveProfile === 'function' ? store.getActiveProfile() : { id: 'default' };
+          var dockUrl = activeProf.id && activeProf.id !== 'default'
+            ? (base + '?dock=1&profile=' + encodeURIComponent(activeProf.id))
+            : (base + '?dock=1');
+          copyText(dockUrl, false);
         });
       }
 
@@ -1542,6 +1846,10 @@
     return {
       render: renderShell,
       refreshBody: renderBody,
+      updateSaveIndicator: updateSaveIndicator,
+      syncPositionInputs: syncPositionInputs,
+      saveNow: saveNowWithFeedback,
+      undo: undoWithFeedback,
       showToast: showToast
     };
   }

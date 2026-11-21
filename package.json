@@ -1,6 +1,6 @@
 {
   "name": "obs-social-vidget",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Smooth, customizable rotating social media widget for OBS Studio with in-OBS configuration and Custom Browser Dock support",
   "main": "server.mjs",
   "scripts": {

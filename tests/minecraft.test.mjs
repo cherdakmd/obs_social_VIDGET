@@ -310,6 +310,24 @@ test('McRenderer builds card markup with status pill, version badge, IP prefix, 
   cfg.appearance.layout = 'ticker';
   const tickerCard = McRenderer.createCardElement(cfg, statusState, { document: doc });
   assert.ok(!tickerCard.innerHTML.includes('Vanilla + Voice Chat'));
+
+  // Aligned IP row/prefix/text classes & signature
+  assert.ok(card.innerHTML.includes('mc-ip-row'));
+  assert.ok(card.innerHTML.includes('mc-ip-prefix'));
+  assert.ok(card.innerHTML.includes('mc-ip-text'));
+
+  const sigWithPrefix = McRenderer.getStructuralSignature(cfg, statusState);
+  cfg.appearance.showIpPrefix = false;
+  const sigWithoutPrefix = McRenderer.getStructuralSignature(cfg, statusState);
+  assert.notEqual(sigWithPrefix, sigWithoutPrefix);
+
+  const noPrefixCard = McRenderer.createCardElement(cfg, statusState, { document: doc });
+  assert.ok(!noPrefixCard.innerHTML.includes('mc-ip-prefix'));
+  assert.ok(noPrefixCard.innerHTML.includes('mc-ip-line'));
+
+  const widePos = McConfig.normalizeConfig({ position: { offsetX: 1480, offsetY: 880 } });
+  assert.equal(widePos.position.offsetX, 1480);
+  assert.equal(widePos.position.offsetY, 880);
 });
 
 test('server.mjs serves Minecraft pages, stores mc-config independently, broadcasts SSE, and pings via /api/mc-status', async () => {
